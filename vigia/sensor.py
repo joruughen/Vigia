@@ -9,6 +9,7 @@ import argparse
 import math
 import os
 import random
+import re
 import ssl
 import sys
 import time
@@ -29,12 +30,42 @@ def construir_medicion(sensor_id: str, llave: bytes, seq: int, timestamp_ms: int
 
 def generar_valor(t_s: float) -> str:
     """Temperatura realista (°C): base + oscilación lenta + ruido; string con 3 decimales."""
-    v = 22.0 + 3.0 * math.sin(t_s / 90.0) + random.gauss(0, 0.25)  # nosec B311 (simulación, no cripto)
+    # random solo da el ruido de la temperatura simulada (sin papel criptográfico).
+    v = 22.0 + 3.0 * math.sin(t_s / 90.0) + random.gauss(0, 0.25)  # nosec B311
     return f"{v:.3f}"
 
 
+LARGO_LLAVE = 32
+_REPLAY_RE = re.compile(r"^replay: seq (\d+) <= última (\d+)$")
+
+
 def leer_llave(ruta: Path) -> bytes:
-    return bytes.fromhex(ruta.read_text().strip())
+    """Lee la llave (hex de 32 bytes). ValueError con mensaje claro si el contenido no es válido."""
+    texto = ruta.read_text().strip()
+    try:
+        llave = bytes.fromhex(texto)
+    except ValueError:
+        raise ValueError("el contenido no es hexadecimal válido") from None
+    if len(llave) != LARGO_LLAVE:
+        raise ValueError(f"la llave debe tener {LARGO_LLAVE} bytes (64 caracteres hex), tiene {len(llave)}")
+    return llave
+
+
+def permisos_inseguros(ruta: Path) -> bool:
+    """True si el archivo es accesible por grupo u otros (se espera 0600)."""
+    return bool(ruta.stat().st_mode & 0o077)
+
+
+def replay_de_seq_pendiente(estado: str, detalle: str, seq_enviada: int) -> bool:
+    """True si el servidor ya tiene la seq enviada (respuesta original perdida).
+
+    Solo cuando el detalle es "replay: seq N <= última M" con N == M == seq enviada. Ante "hueco"
+    (o un replay con última > seq enviada) no se hace nada automático: re-sync manual.
+    """
+    if estado != "REPLAY O HUECO":
+        return False
+    m = _REPLAY_RE.match(detalle)
+    return bool(m) and int(m.group(1)) == seq_enviada and int(m.group(2)) == seq_enviada
 
 
 def leer_seq(ruta: Path) -> int:
@@ -72,9 +103,13 @@ def main(argv: list[str] | None = None) -> int:
     ruta_llave, ruta_seq = base / f"{args.sensor}.key", base / f"{args.sensor}.seq"
     try:
         llave = leer_llave(ruta_llave)
-    except (FileNotFoundError, ValueError) as exc:
+        inseguro = permisos_inseguros(ruta_llave)
+    except (OSError, ValueError) as exc:  # no existe, sin permiso de lectura, formato inválido
         print(f"Error: no se pudo leer la llave en {ruta_llave}: {exc}", file=sys.stderr)
         return 1
+    if inseguro:
+        print(f"Aviso: {ruta_llave} es accesible por otros usuarios; restringe con: chmod 600 {ruta_llave}",
+              file=sys.stderr)
 
     seq = leer_seq(ruta_seq)
     enviados = 0
@@ -96,6 +131,16 @@ def main(argv: list[str] | None = None) -> int:
                         if r["estado"] == "VERIFICADA":
                             seq = siguiente
                             guardar_seq(ruta_seq, seq)
+                        elif replay_de_seq_pendiente(r["estado"], r["detalle"], siguiente):
+                            # El servidor ya tiene esta seq: la respuesta original se perdió.
+                            seq = siguiente
+                            guardar_seq(ruta_seq, seq)
+                            print(f"[seq {siguiente}] Aviso: el servidor ya tenía esta seq (respuesta "
+                                  f"anterior perdida); se avanza la seq local a {seq}.", file=sys.stderr)
+                        elif r["estado"] == "REPLAY O HUECO":
+                            print(f"[seq {siguiente}] Aviso: desincronización con el servidor; "
+                                  "requiere re-sincronización manual (no se corrige automáticamente).",
+                                  file=sys.stderr)
                     else:
                         print(f"[seq {siguiente}] HTTP {resp.status_code}: {resp.text}", file=sys.stderr)
                 enviados += 1

@@ -1,0 +1,64 @@
+# Evidencia TLS 1.3 + simulador (ejecución real, 2026-11-14 19:17 UTC)
+# Directorio de trabajo temporal: <TMP> (certificado autofirmado, contraseña maestra aleatoria de prueba no incluida).
+# Puerto 18443 para no chocar con instancias locales; el procedimiento es el de docs/seguridad-practica.md.
+
+## 1. Certificado, init y registro de sensor
++ scripts/generar_cert.sh
+-----
+Certificado generado en <TMP>/certs/ (cert.pem, key.pem).
++ .venv/bin/python -m vigia.cli init
+Base de datos inicializada en <TMP>/data/vigia.db (salt Argon2id y canario creados).
++ .venv/bin/python -m vigia.cli registrar-sensor sensor-01
+Sensor 'sensor-01' registrado. Llave entregada (fuera de banda) en <TMP>/sensores/sensor-01.key [0600].
+
+## 2. Permisos de lo creado (I3)
+$ stat -c '%a %n' <TMP>/data <TMP>/data/vigia.db <TMP>/sensores <TMP>/sensores/sensor-01.key <TMP>/certs/key.pem
+700 <TMP>/data
+600 <TMP>/data/vigia.db
+700 <TMP>/sensores
+600 <TMP>/sensores/sensor-01.key
+600 <TMP>/certs/key.pem
+
+## 3. Servidor (scripts/run_server.py)
+INFO:     Started server process [PID]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on https://127.0.0.1:18443 (Press CTRL+C to quit)
+INFO:     127.0.0.1:53890 - "POST /api/mediciones HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53890 - "POST /api/mediciones HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53890 - "POST /api/mediciones HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44986 - "POST /api/sensores/sensor-01/verificar-historial HTTP/1.1" 200 OK
+
+## 4. Simulador: python -m vigia.sensor --sensor sensor-01 --url https://127.0.0.1:18443 --cacert <TMP>/certs/cert.pem --n 3 --intervalo 1
+[seq 1] valor=21.936 -> VERIFICADA (ok)
+[seq 2] valor=22.174 -> VERIFICADA (ok)
+[seq 3] valor=21.893 -> VERIFICADA (ok)
+exit=0
+
+## 5. scripts/verificar_tls.sh 127.0.0.1:18443 <TMP>/certs/cert.pem
+== TLS 1.3 (se espera: ACEPTADO) ==
+Peer signature type: ecdsa_secp256r1_sha256
+Verification: OK
+Verified peername: localhost
+New, TLSv1.3, Cipher is TLS_AES_256_GCM_SHA384
+Protocol: TLSv1.3
+Server public key is 256 bit
+Verify return code: 0 (ok)
+
+== TLS 1.2 (se espera: RECHAZADO) ==
+ERR:error:0A000126:SSL routines::unexpected eof while reading:ssl/record/rec_layer_s3.c:697:
+no peer certificate available
+New, (NONE), Cipher is (NONE)
+
+=============== RESUMEN ===============
+TLS 1.3: ACEPTADO (cipher: TLS_AES_256_GCM_SHA384, Verify return code: 0 (ok))
+TLS 1.2: RECHAZADO
+=======================================
+exit=0
+
+## 6. Verificar historial completo (POST /api/sensores/sensor-01/verificar-historial, con --cacert)
+{"sensor_id":"sensor-01","integro":true,"total":3,"registros":[{"seq":1,"estado":"VERIFICADA","detalle":"ok"},{"seq":2,"estado":"VERIFICADA","detalle":"ok"},{"seq":3,"estado":"VERIFICADA","detalle":"ok"}]}
+
+## 7. Controles negativos
+curl --tls-max 1.2 -> exit 35 (35 = fallo de handshake: TLS 1.2 rechazado)
+curl sin --cacert (certificado autofirmado no confiable) -> exit 60 (60 = verificación fallida)

@@ -6,6 +6,10 @@ Orden fijo (se detiene en el primer fallo):
   3 seq == última + 1       -> REPLAY O HUECO
   4 timestamp en ventana    -> FUERA DE VENTANA
   5 cadena consistente      -> CADENA ROTA
+     (el último registro guardado debe tener hash recalculable Y HMAC válido con la
+     llave del sensor; SHA-256 no tiene llave, así que sin el HMAC un atacante con
+     escritura en la BD podría añadir una fila final falsa con hash recalculado y
+     las mediciones legítimas siguientes se encadenarían sobre ella)
 Por qué este orden: primero se autentica (sin HMAC válido, ningún otro campo es
 confiable para decidir), luego la frescura (seq y tiempo) y al final la integridad
 del almacenamiento. Funciones puras: sin I/O ni BD.
@@ -77,18 +81,28 @@ def _hash_iguales(a: str, b: str) -> bool:
     return hmac.compare_digest(a.encode("ascii", "replace"), b.encode("ascii", "replace"))
 
 
+def _es_seq(x) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
+
+
 def _recalcular_hash(r: RegistroGuardado) -> str | None:
     """Recalcula h_i de un registro guardado; None si sus campos están corruptos."""
     try:
         canon = mensaje_canonico(r.sensor_id, r.seq, r.timestamp_ms, r.valor)
         return siguiente_hash(r.hash_prev, canon, r.tag)
-    except (FormatoInvalido, ValueError):
+    except (FormatoInvalido, ValueError, TypeError):
         return None
 
 
 def verificar_medicion(m: Medicion, llave: bytes | None, ultimo: RegistroGuardado | None,
                        ahora_ms: int, ventana_ms: int) -> Resultado:
-    """Aplica los 5 pasos. FormatoInvalido de mensaje_canonico se propaga (HTTP 422)."""
+    """Aplica los 5 pasos. FormatoInvalido de mensaje_canonico se propaga (HTTP 422).
+
+    El paso 5 valida el eslabón base (último registro guardado): recalcula
+    SHA256(hash_prev || canónico || tag) y además re-verifica su HMAC con `llave`.
+    Campos con formato inválido, hash distinto o HMAC inválido -> CADENA ROTA
+    (nunca excepción: la corrupción de la BD no debe confundirse con un 422).
+    """
     # 1. Sensor registrado y activo.
     if llave is None:
         return Resultado(Estado.FALSA, "sensor no registrado o revocado", None)
@@ -98,8 +112,11 @@ def verificar_medicion(m: Medicion, llave: bytes | None, ultimo: RegistroGuardad
     if not verificar_tag(llave, canon, m.tag):
         return Resultado(Estado.MANIPULADA, "HMAC inválido", None)
 
-    # 3. Secuencia estrictamente consecutiva.
-    esperado = 1 if ultimo is None else ultimo.seq + 1
+    # 3. Secuencia estrictamente consecutiva. Si el seq guardado está corrupto no se
+    #    puede comparar; se deja pasar aquí y el paso 5 lo marca CADENA ROTA (nunca
+    #    se llega a VERIFICADA), sin alterar el orden de los pasos.
+    seq_base_ok = ultimo is None or _es_seq(ultimo.seq)
+    esperado = 1 if ultimo is None else (ultimo.seq + 1 if seq_base_ok else m.seq)
     if m.seq < esperado:
         return Resultado(Estado.REPLAY_O_HUECO,
                          f"replay: seq {m.seq} <= última {esperado - 1}", None)
@@ -117,10 +134,23 @@ def verificar_medicion(m: Medicion, llave: bytes | None, ultimo: RegistroGuardad
     if ultimo is None:
         hash_base = GENESIS
     else:
+        try:
+            canon_ultimo = mensaje_canonico(ultimo.sensor_id, ultimo.seq,
+                                            ultimo.timestamp_ms, ultimo.valor)
+        except (FormatoInvalido, ValueError, TypeError):
+            return Resultado(Estado.CADENA_ROTA,
+                             f"último registro guardado con formato inválido (seq {ultimo.seq!r})",
+                             None)
         recalculado = _recalcular_hash(ultimo)
         if recalculado is None or not _hash_iguales(recalculado, ultimo.hash):
             return Resultado(Estado.CADENA_ROTA,
                              f"hash del registro guardado seq {ultimo.seq} no coincide", None)
+        # El hash no tiene llave: sin re-verificar el HMAC una fila final falsa con
+        # hash recalculado sería aceptada como base de la cadena.
+        if not verificar_tag(llave, canon_ultimo, ultimo.tag):
+            return Resultado(Estado.CADENA_ROTA,
+                             f"último registro guardado con HMAC inválido (seq {ultimo.seq})",
+                             None)
         hash_base = ultimo.hash
 
     return Resultado(Estado.VERIFICADA, "ok", siguiente_hash(hash_base, canon, m.tag))

@@ -45,17 +45,51 @@ def nuevo_salt() -> bytes:
     return os.urandom(LARGO_SALT)
 
 
-def derivar_kek(contrasena: str, salt: bytes) -> bytes:
-    """Deriva la KEK de 32 bytes con Argon2id (Type.ID: resiste canal lateral y GPU)."""
+# Mínimos OWASP para Argon2id (m=19 MiB, t=2, p=1). Impiden que quien edite
+# kdf_params en la BD degrade la derivación (p.ej. t=1, m=8 KiB) para acelerar
+# un ataque de diccionario sobre la contraseña maestra.
+MIN_ARGON2: dict = {"time_cost": 2, "memory_cost": 19456, "parallelism": 1}
+_CLAVES_ARGON2 = frozenset(PARAMS_ARGON2)
+
+
+def validar_params_argon2(params: dict) -> dict:
+    """Valida parámetros Argon2id leídos de la BD; devuelve una copia limpia o ValueError."""
+    if not isinstance(params, dict):
+        raise ValueError("kdf_params debe ser un objeto/dict")
+    claves = set(params)
+    if claves != _CLAVES_ARGON2:
+        faltan = sorted(_CLAVES_ARGON2 - claves)
+        sobran = sorted(claves - _CLAVES_ARGON2)
+        raise ValueError(f"kdf_params con claves inválidas (faltan {faltan}, sobran {sobran})")
+    for k, v in params.items():
+        # bool es subclase de int: se rechaza explícitamente.
+        if not isinstance(v, int) or isinstance(v, bool):
+            raise ValueError(f"kdf_params.{k} debe ser entero")
+    if params["hash_len"] != LARGO_KEK:
+        raise ValueError(f"kdf_params.hash_len debe ser {LARGO_KEK} (AES-256)")
+    for k, minimo in MIN_ARGON2.items():
+        if params[k] < minimo:
+            raise ValueError(f"kdf_params.{k}={params[k]} por debajo del mínimo {minimo} "
+                             "(posible degradación de Argon2id)")
+    return {k: int(params[k]) for k in PARAMS_ARGON2}
+
+
+def derivar_kek(contrasena: str, salt: bytes, params: dict | None = None) -> bytes:
+    """Deriva la KEK de 32 bytes con Argon2id (Type.ID: resiste canal lateral y GPU).
+
+    params: los kdf_params guardados en la BD (None = PARAMS_ARGON2). Se validan
+    con validar_params_argon2 para rechazar valores degradados.
+    """
     if not isinstance(contrasena, str) or not contrasena:
         raise ValueError("contraseña maestra vacía")
     if not isinstance(salt, (bytes, bytearray)) or len(salt) < LARGO_SALT:
         raise ValueError("salt debe tener al menos 16 bytes")
+    efectivos = dict(PARAMS_ARGON2) if params is None else validar_params_argon2(params)
     return hash_secret_raw(
         secret=contrasena.encode("utf-8"),
         salt=bytes(salt),
         type=Type.ID,
-        **PARAMS_ARGON2,
+        **efectivos,
     )
 
 

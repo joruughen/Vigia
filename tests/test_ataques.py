@@ -127,9 +127,6 @@ def test_ataque7_contrasena_incorrecta_no_arranca(entorno, monkeypatch):
         create_app(load_config())
 
 
-# BUG DE PRODUCCIÓN (test fallando a propósito): si el archivo de BD no existe o no tiene el
-# esquema, Database.meta_get lanza sqlite3.OperationalError ("no such table: meta") en vez de
-# ArranqueError con el mensaje "Ejecuta: python -m vigia.cli init". Ver vigia/server/db.py.
 def test_ataque7_bd_sin_inicializar_no_arranca(entorno, monkeypatch, tmp_path):
     monkeypatch.setenv("VIGIA_DB_PATH", str(tmp_path / "otra.db"))
     with pytest.raises(ArranqueError, match="no está inicializada"):

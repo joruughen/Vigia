@@ -1,6 +1,7 @@
 """API FastAPI de VIGÍA: ingesta verificada, consulta y dashboard."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Path as PathParam, Query, Request
@@ -9,10 +10,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from vigia.config import Config
+from vigia.crypto.keystore import ContrasenaIncorrecta
 from vigia.crypto.canonical import FormatoInvalido, mensaje_canonico
 from vigia.crypto.verifier import Medicion, verificar_historial
 from vigia.server.db import Database, ahora_ms
 
+log = logging.getLogger("vigia")
 STATIC_DIR = Path(__file__).parent / "static"
 ID_PATRON = r"^[A-Za-z0-9_-]{1,64}$"
 INT64_MAX = 2**63 - 1
@@ -60,6 +63,12 @@ def create_app(config: Config) -> FastAPI:
     @app.exception_handler(FormatoInvalido)
     async def formato_invalido(_: Request, exc: FormatoInvalido):
         return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+    @app.exception_handler(ContrasenaIncorrecta)
+    async def llave_ilegible(request: Request, _: ContrasenaIncorrecta):
+        # Blob de llave corrupto/alterado en la BD: respuesta genérica, sin traceback ni detalles.
+        log.error("llave de sensor ilegible (blob corrupto o alterado) en %s", request.url.path)
+        return JSONResponse(status_code=500, content={"error": "llave de sensor ilegible"})
 
     @app.post("/api/mediciones")
     def recibir_medicion(entrada: MedicionIn):

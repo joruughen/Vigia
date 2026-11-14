@@ -2,11 +2,14 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
+
+from argon2.exceptions import HashingError
 
 from vigia.crypto import keystore
 from vigia.crypto.chain import GENESIS
@@ -59,9 +62,20 @@ def ahora_ms() -> int:
     return time.time_ns() // 1_000_000
 
 
+def _crear_archivo_privado(ruta: str) -> None:
+    """Crea el archivo de BD con 0600 si no existe (SQLite lo crearía según el umask)."""
+    if ruta == ":memory:" or ruta.startswith("file:"):
+        return
+    try:
+        os.close(os.open(ruta, os.O_WRONLY | os.O_CREAT, 0o600))
+    except OSError:
+        return  # que sqlite3 informe el error real al conectar
+
+
 class Database:
     def __init__(self, ruta: str | Path):
         self.ruta = str(ruta)
+        _crear_archivo_privado(self.ruta)
 
     @contextmanager
     def conexion(self) -> Iterator[sqlite3.Connection]:
@@ -96,7 +110,7 @@ class Database:
         if self.inicializada():
             raise ArranqueError("La base de datos ya está inicializada.")
         salt = keystore.nuevo_salt()
-        kek = keystore.derivar_kek(contrasena, salt)
+        kek = keystore.derivar_kek(contrasena, salt, dict(keystore.PARAMS_ARGON2))
         nonce, ct = keystore.crear_canario(kek)
         params = json.dumps(keystore.PARAMS_ARGON2, sort_keys=True).encode()
         with self.conexion() as con:
@@ -114,12 +128,25 @@ class Database:
             salt = self.meta_get("kdf_salt")
             nonce = self.meta_get("canario_nonce")
             ct = self.meta_get("canario_ct")
+            params_raw = self.meta_get("kdf_params")
         except sqlite3.OperationalError:  # archivo vacío o sin esquema
-            salt = nonce = ct = None
+            salt = nonce = ct = params_raw = None
         if salt is None or nonce is None or ct is None:
             raise ArranqueError(
                 "La base de datos no está inicializada. Ejecuta: python -m vigia.cli init")
-        kek = keystore.derivar_kek(contrasena, salt)
+        try:
+            if params_raw is None:
+                raise ValueError("falta kdf_params")
+            params = json.loads(params_raw.decode("utf-8"))
+            if not isinstance(params, dict):
+                raise ValueError("kdf_params no es un objeto JSON")
+            kek = keystore.derivar_kek(contrasena, salt, params)
+        except (ValueError, TypeError, HashingError) as exc:
+            # JSONDecodeError y UnicodeDecodeError son subclases de ValueError.
+            raise ArranqueError(
+                "Parámetros Argon2id (kdf_params) o salt de la base de datos inválidos o por debajo "
+                f"de los mínimos de seguridad: {exc}. La BD pudo ser alterada; no es un problema "
+                "de contraseña.") from exc
         try:
             keystore.comprobar_canario(kek, nonce, ct)
         except keystore.ContrasenaIncorrecta as exc:

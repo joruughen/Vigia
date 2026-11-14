@@ -7,7 +7,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from vigia.config import Config, ConfigError, load_config
+from vigia.config import Config, ConfigError, crear_directorio_privado, load_config
 from vigia.crypto import keystore
 from vigia.crypto.canonical import FormatoInvalido, mensaje_canonico
 from vigia.crypto.mac import generar_llave_sensor
@@ -16,7 +16,7 @@ from vigia.server.db import ArranqueError, Database
 
 def _escribir_llave(ruta: Path, llave: bytes) -> None:
     """Escribe la llave en hex con permiso 0600 (simula la entrega fuera de banda). No sobrescribe."""
-    ruta.parent.mkdir(parents=True, exist_ok=True)
+    crear_directorio_privado(ruta.parent)
     fd = os.open(ruta, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write(llave.hex() + "\n")
