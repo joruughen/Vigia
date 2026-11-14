@@ -10,7 +10,7 @@ VIGÍA **no** cifra las mediciones almacenadas (las hace verificables, no confid
 
 ## Requisitos
 
-- Linux o macOS, Python 3.12 o superior (probado en 3.14) y OpenSSL (para `scripts/generar_cert.sh` y `scripts/verificar_tls.sh`).
+- Linux o macOS, Python: probado con Python 3.14 (no se probó en otras versiones) y OpenSSL (para `scripts/generar_cert.sh` y `scripts/verificar_tls.sh`).
 - Opcional: Node (`npx`) para regenerar los diagramas; `pandoc` y un Chrome/Chromium headless para exportar el informe a PDF.
 
 ## Instalación
