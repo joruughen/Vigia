@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VIGÍA — Telemetría verificable</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>VIGÍA</h1>
+    <label class="sensor-sel">Sensor activo
+      <select id="sensor-select" aria-label="Sensor activo"></select>
+    </label>
+    <span id="estado-conexion" class="muted" role="status"></span>
+  </header>
+
+  <div class="layout">
+    <nav class="menu" aria-label="Secciones">
+      <button class="menu-btn activo" data-vista="resumen">Resumen</button>
+      <button class="menu-btn" data-vista="mediciones">Mediciones</button>
+      <button class="menu-btn" data-vista="historial">Historial</button>
+      <button class="menu-btn" data-vista="configuracion">Configuración</button>
+    </nav>
+
+    <main>
+      <p id="sin-sensores" class="aviso" hidden>No hay sensores registrados. Usa <code>python -m vigia.cli registrar-sensor &lt;id&gt;</code>.</p>
+
+      <section id="vista-resumen" class="vista">
+        <h2>Resumen</h2>
+        <div id="tarjetas" class="tarjetas"></div>
+        <h3>Serie de tiempo (solo mediciones verificadas)</h3>
+        <div class="grafico"><canvas id="grafico-resumen"></canvas></div>
+        <p id="grafico-resumen-msg" class="muted"></p>
+        <h3>Últimos eventos de todos los sensores</h3>
+        <div class="tabla-wrap"><table id="tabla-global">
+          <thead><tr><th>Fecha y hora</th><th>Sensor</th><th>Seq</th><th>Estado</th><th>Detalle</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </section>
+
+      <section id="vista-mediciones" class="vista" hidden>
+        <h2>Mediciones recibidas</h2>
+        <p class="muted">Todos los intentos del sensor, con el resultado de la verificación.</p>
+        <div class="tabla-wrap"><table id="tabla-eventos">
+          <thead><tr><th>Fecha y hora</th><th>Seq</th><th>Valor</th><th>HMAC</th><th>Estado</th><th>Detalle</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </section>
+
+      <section id="vista-historial" class="vista" hidden>
+        <h2>Historial</h2>
+        <div class="grafico"><canvas id="grafico-historial"></canvas></div>
+        <p id="grafico-historial-msg" class="muted"></p>
+        <button id="btn-verificar" class="btn-primario">Verificar historial completo del sensor</button>
+        <div id="reporte" aria-live="polite"></div>
+      </section>
+
+      <section id="vista-configuracion" class="vista" hidden>
+        <h2>Configuración</h2>
+        <dl id="config-lista" class="config"></dl>
+        <h3>Sensores</h3>
+        <div class="tabla-wrap"><table id="tabla-sensores">
+          <thead><tr><th>ID</th><th>Estado</th><th>Verificadas</th><th>Intentos</th><th>Última seq</th><th>Último estado</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+        <p class="muted">Las llaves de sensor nunca se muestran. Registro y revocación: <code>python -m vigia.cli</code>.</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"
+          integrity="sha512-CQBWl4fJHWbryGE+Pc7UAxWMUMNMWzWxF4SQo9CgkJIN1kx6djDQZjh3Y8SZ1d+6I+1zze6Z7kHXO7q3UyZAWw=="
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

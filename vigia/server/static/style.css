@@ -1,0 +1,68 @@
+:root {
+  --bg: #f5f6f8; --panel: #ffffff; --texto: #1c2430; --muted: #5d6877; --borde: #d9dee5;
+  --acento: #1d5fd1; --linea: #1d5fd1;
+  --verde: #1b7a3d; --rojo: #b3261e; --naranja: #b85c00; --amarillo: #8a6d00; --morado: #6b3fa0;
+  --verde-bg: #dff3e6; --rojo-bg: #fbe0de; --naranja-bg: #fde8d2; --amarillo-bg: #fff3c4; --morado-bg: #ebe0f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151b; --panel: #1a2028; --texto: #e6eaf0; --muted: #9aa5b4; --borde: #2c3541;
+    --acento: #6ea2ff; --linea: #6ea2ff;
+    --verde: #6fd58f; --rojo: #ff8f86; --naranja: #ffb366; --amarillo: #f0d35c; --morado: #c8a6f5;
+    --verde-bg: #173524; --rojo-bg: #3d1c1a; --naranja-bg: #3d2a14; --amarillo-bg: #38310f; --morado-bg: #2c2040;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--texto);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+code { background: var(--borde); padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+.topbar { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; padding: 12px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--borde); }
+.topbar h1 { margin: 0; font-size: 20px; letter-spacing: 0.12em; }
+.sensor-sel { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+select, button { font: inherit; color: inherit; }
+select { padding: 5px 8px; background: var(--panel); border: 1px solid var(--borde); border-radius: 6px; }
+.layout { display: flex; gap: 16px; padding: 16px; align-items: flex-start; }
+.menu { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+.menu-btn { text-align: left; padding: 8px 12px; background: transparent; border: 1px solid transparent;
+  border-radius: 6px; cursor: pointer; }
+.menu-btn:hover { background: var(--panel); border-color: var(--borde); }
+.menu-btn.activo { background: var(--panel); border-color: var(--acento); font-weight: 600; }
+main { flex: 1; min-width: 0; }
+.vista h2 { margin-top: 0; }
+.vista h3 { margin: 24px 0 8px; font-size: 16px; }
+.muted { color: var(--muted); }
+.aviso { background: var(--amarillo-bg); color: var(--amarillo); padding: 10px 14px; border-radius: 6px; }
+.tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tarjeta { background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 12px; }
+.tarjeta .t { color: var(--muted); font-size: 13px; }
+.tarjeta .v { font-size: 22px; font-weight: 600; }
+.grafico { background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; padding: 12px;
+  height: 300px; position: relative; }
+.tabla-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--borde); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--borde); white-space: nowrap; }
+th { font-size: 13px; color: var(--muted); font-weight: 600; }
+tbody tr:last-child td { border-bottom: none; }
+td.mono, .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 13px; }
+.etiqueta { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  border: 1px solid currentColor; }
+.e-verificada { color: var(--verde); background: var(--verde-bg); }
+.e-manipulada, .e-falsa { color: var(--rojo); background: var(--rojo-bg); }
+.e-replay { color: var(--naranja); background: var(--naranja-bg); }
+.e-ventana { color: var(--amarillo); background: var(--amarillo-bg); }
+.e-cadena { color: var(--morado); background: var(--morado-bg); }
+.btn-primario { margin-top: 16px; padding: 10px 18px; background: var(--acento); color: #fff; border: none;
+  border-radius: 6px; font-weight: 600; cursor: pointer; }
+.btn-primario:disabled { opacity: 0.6; cursor: wait; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-primario { color: #0b1220; } }
+#reporte { margin-top: 16px; }
+.banner { padding: 12px 16px; border-radius: 8px; font-weight: 600; margin-bottom: 12px; }
+.banner.ok { background: var(--verde-bg); color: var(--verde); }
+.banner.mal { background: var(--rojo-bg); color: var(--rojo); }
+.config { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; }
+.config dt { font-weight: 600; } .config dd { margin: 0; }
+@media (max-width: 640px) {
+  .layout { flex-direction: column; padding: 16px; }
+  .menu { flex-direction: row; flex-wrap: wrap; min-width: 0; }
+}

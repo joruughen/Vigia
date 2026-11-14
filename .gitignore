@@ -1,0 +1,16 @@
+# Agentes de Claude Code (fuera del repo)
+.claude/
+# Entorno
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# Secretos y datos locales: NUNCA al repo
+.env
+*.key
+*.pem
+certs/
+sensores/
+data/
+*.db
+*.sqlite3
