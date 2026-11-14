@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 PY=".venv/bin/python"
 BANDIT=".venv/bin/bandit"
 PIP_AUDIT=".venv/bin/pip-audit"
-OUT="docs/analisis-estatico"
+OUT="${ANALISIS_OUT:-docs/analisis-estatico}"  # ANALISIS_OUT: otra carpeta de salida
 
 mkdir -p "$OUT"
 

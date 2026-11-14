@@ -14,3 +14,5 @@ sensores/
 data/
 *.db
 *.sqlite3
+# Entorno de demo (contraseña, BD, llaves, certificado): scripts/demo.sh
+demo-run/
