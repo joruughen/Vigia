@@ -4,9 +4,14 @@
 #   scripts/demo.sh up        crea demo-run/ (si falta), levanta servidor TLS y simulador de sensor-01
 #   scripts/demo.sh status    estado de procesos y resumen de sensores
 #   scripts/demo.sh down      detiene servidor y simulador
-#   scripts/demo.sh reset     down + borra demo-run/ (contraseña, BD, llaves y certificado)
+#   scripts/demo.sh reset     down + borra demo-run/ (contraseña, BD, llaves y certificado; hay que volver a
+#                             aceptar el certificado y `up` deja todo en cero)
 # Atajos para la demo en vivo (usan la configuración de demo-run/):
 #   scripts/demo.sh ataque <subcomando>   = scripts/ataques.py <subcomando>   (p.ej. "ataque todos")
+#   scripts/demo.sh bd-alterar            daña la BD de sensor-02 (valor alterado) y LO DEJA; verlo en el dashboard
+#   scripts/demo.sh bd-borrar             daña la BD de sensor-02 (registro borrado) y LO DEJA; se suma al anterior
+#   scripts/demo.sh restaurar             deshace todo el daño de sensor-02 (sensor-01 intacto; servidor y
+#                                         simulador siguen corriendo): sirve para repetir la demo
 #   scripts/demo.sh bd                    = scripts/mostrar_bd.py (llaves ilegibles)
 #   scripts/demo.sh tls                   = scripts/verificar_tls.sh (TLS 1.3 sí, TLS 1.2 no)
 #   scripts/demo.sh estatico              resumen del último reporte de análisis estático (solo lectura)
@@ -167,9 +172,12 @@ Certificado autofirmado: el navegador mostrará una advertencia.
 Comandos de la demo:
   scripts/demo.sh ataque todos     # todos los ataques y tabla resumen
   scripts/demo.sh ataque --help    # ataques individuales
+  scripts/demo.sh bd-alterar       # daña la BD de sensor-02 (valor alterado) y lo deja
+  scripts/demo.sh bd-borrar        # idem, registro borrado (se suma al anterior)
+  scripts/demo.sh restaurar        # deshace el daño de sensor-02 (sin reiniciar nada)
   scripts/demo.sh bd               # BD robada: llaves cifradas
   scripts/demo.sh tls              # TLS 1.3 activo
-  scripts/demo.sh status | down | reset
+  scripts/demo.sh status | down | reset   (reset borra demo-run/; restaurar solo repara sensor-02)
 ============================================
 EOF
 }
@@ -262,11 +270,14 @@ case "${1:-}" in
   down)     cmd_down ;;
   reset)    cmd_reset ;;
   status)   cmd_status ;;
+  bd-alterar) cargar_env; exec "$PY" scripts/ataques.py bd-alterar-valor ;;
+  bd-borrar)  cargar_env; exec "$PY" scripts/ataques.py bd-borrar ;;
+  restaurar)  cargar_env; exec "$PY" scripts/ataques.py restaurar ;;
   ataque)   shift; cargar_env; exec "$PY" scripts/ataques.py "$@" ;;
   bd)       shift; cargar_env; exec "$PY" scripts/mostrar_bd.py --db "$VIGIA_DB_PATH" \
               --sensores-dir "$VIGIA_SENSORES_DIR" "$@" ;;
   tls)      cargar_env; exec scripts/verificar_tls.sh "${VIGIA_HOST}:${VIGIA_PORT}" "$CACERT" ;;
   estatico) cmd_estatico ;;
   logs)     [[ -f "$SRV_LOG" ]] || die "no hay $SRV_LOG"; exec tail -n 30 -f "$SRV_LOG" ;;
-  *)        sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; [[ -z "${1:-}" ]] || exit 2 ;;
+  *)        sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; [[ -z "${1:-}" ]] || exit 2 ;;
 esac

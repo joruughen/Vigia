@@ -705,7 +705,7 @@ El script deja los resultados en `docs/analisis-estatico/` (`bandit.txt`, `bandi
 
 | Alcance | Herramienta | Resultado |
 |---|---|---|
-| Código de la aplicación (`vigia/` y `scripts/`, 1589 líneas) | bandit | **0 hallazgos** (ninguna severidad) |
+| Código de la aplicación (`vigia/` y `scripts/`, 1670 líneas) | bandit | **0 hallazgos** (ninguna severidad) |
 | Dependencias de ejecución (`requirements.txt`) | pip-audit | **0 vulnerabilidades conocidas** |
 | Dependencias de desarrollo (`requirements-dev.txt`) | pip-audit | **0 vulnerabilidades conocidas** |
 | Tests (`tests/`, 1053 líneas) | bandit | 202 hallazgos: 201 × B101 y 1 × B105, **falsos positivos** |

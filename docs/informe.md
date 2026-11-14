@@ -246,7 +246,7 @@ En reposo, **solo las llaves K se cifran** (`sensores.llave_cifrada`: AES-256-GC
 
 | Alcance | Herramienta | Resultado |
 |---|---|---|
-| Código de la aplicación (`vigia/` y `scripts/`, 1589 líneas) | bandit | **0 hallazgos** |
+| Código de la aplicación (`vigia/` y `scripts/`, 1670 líneas) | bandit | **0 hallazgos** |
 | Dependencias de ejecución y de desarrollo | pip-audit | **0 vulnerabilidades conocidas** |
 | Tests (`tests/`, 1053 líneas) | bandit | 202 hallazgos: 201 × B101 (`assert`) y 1 × B105, **falsos positivos** |
 

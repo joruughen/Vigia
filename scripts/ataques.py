@@ -3,7 +3,7 @@
 Uso (con la demo levantada por scripts/demo.sh up):
     python scripts/ataques.py <ataque> [--restaurar] [--no-color]
     python scripts/ataques.py todos            # todos, en orden, con tabla resumen
-    python scripts/ataques.py restaurar        # deshace el daño en BD de ataques previos
+    python scripts/ataques.py restaurar        # deshace el daño en BD (solo sensor-02) y verifica el historial
 
 Habla con el servidor por HTTPS validando el certificado (--cacert) y lee la configuración de
 demo-run/.env (rutas, host, puerto). NO lee la contraseña maestra ni imprime llaves: las llaves de
@@ -183,31 +183,69 @@ def guardar_restauracion(ctx: Contexto, op: dict) -> None:
     os.replace(tmp, ctx.estado_restauracion)
 
 
-def restaurar(ctx: Contexto, silencioso: bool = False) -> int:
-    """Deshace (en orden inverso) los daños registrados por los ataques sobre la BD."""
+def _op_sensor(op: dict) -> str | None:
+    return op["fila"].get("sensor_id") if op.get("tipo") == "fila" else op.get("sensor_id")
+
+
+def _ops_pendientes(ctx: Contexto) -> list[dict]:
     if not ctx.estado_restauracion.is_file():
-        if not silencioso:
-            ctx.out.nota("No hay daños en BD pendientes de restaurar.")
-        return 0
-    ops = json.loads(ctx.estado_restauracion.read_text())
-    with closing(ctx.conectar_bd()) as con, con:
-        for op in reversed(ops):
-            if op["tipo"] == "valor":
-                con.execute("UPDATE mediciones SET valor = ? WHERE sensor_id = ? AND seq = ?",
-                            (op["valor"], op["sensor_id"], op["seq"]))
-            elif op["tipo"] == "hash":
-                con.execute("UPDATE mediciones SET hash = ? WHERE sensor_id = ? AND seq = ?",
-                            (op["hash"], op["sensor_id"], op["seq"]))
-            elif op["tipo"] == "fila":
-                f = op["fila"]
-                con.execute(
-                    "INSERT OR IGNORE INTO mediciones (id, sensor_id, seq, timestamp_ms, valor, tag, hash_prev, hash)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (f["id"], f["sensor_id"], f["seq"], f["timestamp_ms"], f["valor"], f["tag"],
-                     f["hash_prev"], f["hash"]))
-    ctx.estado_restauracion.unlink()
+        return []
+    try:
+        ops = json.loads(ctx.estado_restauracion.read_text())
+        return [o for o in ops if isinstance(o, dict)]
+    except (ValueError, OSError):
+        raise AtaqueError(f"{ctx.estado_restauracion} está corrupto; bórralo y, si hace falta, "
+                          "scripts/demo.sh reset && scripts/demo.sh up")
+
+
+def restaurar(ctx: Contexto, silencioso: bool = False, verificar: bool = False) -> int:
+    """Deshace (en orden inverso) los daños registrados por los ataques sobre la BD.
+
+    Solo toca registros de sensor-02: cualquier operación de otro sensor se ignora con aviso.
+    Con verificar=True consulta verificar-historial de sensor-02 y devuelve 1 si no queda íntegro."""
+    todas = _ops_pendientes(ctx)
+    ops = [o for o in todas if _op_sensor(o) == SENSOR_BD]
+    for o in todas:
+        if _op_sensor(o) != SENSOR_BD:
+            ctx.out.nota(f"AVISO: operación de restauración ignorada (sensor {_op_sensor(o)!r}; "
+                         f"solo se restaura {SENSOR_BD}).")
+    if ops:
+        with closing(ctx.conectar_bd()) as con, con:
+            for op in reversed(ops):
+                if op["tipo"] == "valor":
+                    con.execute("UPDATE mediciones SET valor = ? WHERE sensor_id = ? AND seq = ?",
+                                (op["valor"], SENSOR_BD, op["seq"]))
+                elif op["tipo"] == "hash":
+                    con.execute("UPDATE mediciones SET hash = ? WHERE sensor_id = ? AND seq = ?",
+                                (op["hash"], SENSOR_BD, op["seq"]))
+                elif op["tipo"] == "fila":
+                    f = op["fila"]
+                    con.execute(
+                        "INSERT OR IGNORE INTO mediciones "
+                        "(id, sensor_id, seq, timestamp_ms, valor, tag, hash_prev, hash)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (f["id"], SENSOR_BD, f["seq"], f["timestamp_ms"], f["valor"], f["tag"],
+                         f["hash_prev"], f["hash"]))
+    if ctx.estado_restauracion.is_file():
+        ctx.estado_restauracion.unlink()
     if not silencioso:
-        ctx.out.nota(f"BD restaurada ({len(ops)} operación(es) deshecha(s)).")
+        if ops:
+            ctx.out.nota(f"BD restaurada ({len(ops)} operación(es) de {SENSOR_BD} deshecha(s)).")
+        else:
+            ctx.out.nota("No hay daños en BD pendientes de restaurar.")
+    if not verificar:
+        return 0
+    rep = ctx.historial(SENSOR_BD)
+    ctx.out.campo("Historial", f"{SENSOR_BD} integro={str(rep['integro']).lower()} ({rep['total']} registros)")
+    if not rep["integro"]:
+        for r in rep["registros"]:
+            if r["estado"] != VERIFICADA:
+                ctx.out.campo(f"  seq {r['seq']}", f"{ctx.out.estado(r['estado'], True)} ({r['detalle']})")
+        if not ops:
+            ctx.out.error(f"no había operaciones pendientes pero el historial de {SENSOR_BD} no está íntegro "
+                          "(¿se perdió demo-run/ataques-restaurar.json?). "
+                          "Reinicia la demo: scripts/demo.sh reset && scripts/demo.sh up")
+        return 1
     return 0
 
 
@@ -318,12 +356,49 @@ def _mostrar_historial(ctx: Contexto, rep: dict, cambiados: dict[int, str]) -> N
         ctx.out.campo(f"  seq {seq}", f"{ctx.out.estado(estado, True)} ({detalles.get(seq, '')})")
 
 
-def _registro_intermedio(ctx: Contexto) -> sqlite3.Row:
+MIN_HISTORIAL_BD = 6           # para que alterar (~1/3) y borrar (~2/3) convivan sin tocarse
+
+
+def _filas_bd(ctx: Contexto) -> list[sqlite3.Row]:
     with closing(ctx.conectar_bd()) as con:
-        filas = con.execute("SELECT * FROM mediciones WHERE sensor_id = ? ORDER BY seq", (SENSOR_BD,)).fetchall()
-    if len(filas) < 3:
-        raise AtaqueError(f"{SENSOR_BD} necesita al menos 3 registros (hay {len(filas)})")
-    return filas[len(filas) // 2]  # nunca el primero ni el último (len >= 3)
+        return con.execute("SELECT * FROM mediciones WHERE sensor_id = ? ORDER BY seq", (SENSOR_BD,)).fetchall()
+
+
+def _pendientes(ctx: Contexto, tipo: str) -> list[dict]:
+    return [o for o in _ops_pendientes(ctx) if o.get("tipo") == tipo and _op_sensor(o) == SENSOR_BD]
+
+
+def _elegir_registro(ctx: Contexto, para: str) -> sqlite3.Row:
+    """Elige el registro de sensor-02 a dañar para que ambos daños convivan en el reporte.
+
+    alterar: ~1/3 del historial, y nunca el registro inmediatamente posterior a un hueco (su MANIPULADA
+             taparía el CADENA ROTA del borrado).
+    borrar:  ~2/3 del historial, con vecinos contiguos y sin tocar ni quedar junto a un registro alterado.
+    Nunca el primero ni el último."""
+    filas = _filas_bd(ctx)
+    n = len(filas)
+    borrados = len(_pendientes(ctx, "fila"))  # registros ya borrados por un bd-borrar previo
+    if n + borrados < MIN_HISTORIAL_BD:
+        raise AtaqueError(f"{SENSOR_BD} necesita al menos {MIN_HISTORIAL_BD} registros (hay {n})")
+    alterados = {o["seq"] for o in _pendientes(ctx, "valor")}
+
+    def valido(i: int) -> bool:
+        if not 1 <= i <= n - 2:
+            return False
+        seq = filas[i]["seq"]
+        tras_hueco = filas[i - 1]["seq"] != seq - 1
+        if para == "alterar":
+            return not tras_hueco
+        return (not tras_hueco and filas[i + 1]["seq"] == seq + 1
+                and not ({seq - 1, seq, seq + 1} & alterados))
+
+    objetivo = n // 3 if para == "alterar" else (2 * n) // 3
+    for d in range(n):
+        for i in (objetivo + d, objetivo - d):
+            if valido(i):
+                return filas[i]
+    raise AtaqueError(f"no hay un registro adecuado de {SENSOR_BD} para {para}; "
+                      "restaura primero: scripts/demo.sh restaurar")
 
 
 def _cambios(antes: dict[int, str], despues: dict[int, str]) -> dict[int, str]:
@@ -332,18 +407,37 @@ def _cambios(antes: dict[int, str], despues: dict[int, str]) -> dict[int, str]:
 
 def _verificar_tras_ataque(ctx: Contexto, antes: dict[int, str], esperado: dict[int, str]) -> tuple[str, dict]:
     rep = ctx.historial(SENSOR_BD)
-    cambiados = _cambios(antes, _estados(rep))
-    _mostrar_historial(ctx, rep, cambiados)
+    despues = _estados(rep)
+    cambiados = _cambios(antes, despues)
+    _mostrar_historial(ctx, rep, {s: e for s, e in despues.items() if e != VERIFICADA})
     if cambiados == esperado and not rep["integro"]:
         return next(iter(esperado.values())), rep
     return f"inesperado: {cambiados or 'sin cambios'}", rep
 
 
+def _ya_aplicado(ctx: Contexto, op: dict, esperado: dict[int, str]) -> str:
+    """El daño equivalente ya está pendiente: no se repite, solo se muestra el estado actual."""
+    ctx.out.campo("Ya aplicado", f"el daño sobre {SENSOR_BD} seq {_seq_op(op)} ya está en la BD; no se repite")
+    rep = ctx.historial(SENSOR_BD)
+    despues = _estados(rep)
+    _mostrar_historial(ctx, rep, {s: e for s, e in despues.items() if e != VERIFICADA})
+    return next(iter(esperado.values())) if all(despues.get(s) == e for s, e in esperado.items()) else "inesperado"
+
+
+def _seq_op(op: dict) -> int:
+    return op["fila"]["seq"] if op["tipo"] == "fila" else op["seq"]
+
+
 def ataque_bd_alterar_valor(ctx: Contexto, args) -> Resultado:
     ctx.out.titulo("ATAQUE: bd-alterar-valor (atacante con escritura en la BD edita un valor)")
-    asegurar_historial(ctx)
+    previo = _pendientes(ctx, "valor")
+    if previo:
+        obtenido = _ya_aplicado(ctx, previo[0], {previo[0]["seq"]: "MANIPULADA"})
+        _fin_bd(ctx, args)
+        return Resultado("bd-alterar-valor", "MANIPULADA", obtenido)
+    asegurar_historial(ctx, MIN_HISTORIAL_BD)
     antes = _estados(ctx.historial(SENSOR_BD))
-    fila = _registro_intermedio(ctx)
+    fila = _elegir_registro(ctx, "alterar")
     try:
         nuevo = f"{float(fila['valor']) + 10:.3f}"
     except ValueError:
@@ -363,11 +457,16 @@ def ataque_bd_alterar_valor(ctx: Contexto, args) -> Resultado:
 
 def ataque_bd_borrar(ctx: Contexto, args) -> Resultado:
     ctx.out.titulo("ATAQUE: bd-borrar (atacante con escritura en la BD borra una medición)")
-    asegurar_historial(ctx)
+    previo = _pendientes(ctx, "fila")
+    if previo:
+        obtenido = _ya_aplicado(ctx, previo[0], {previo[0]["fila"]["seq"] + 1: "CADENA ROTA"})
+        _fin_bd(ctx, args)
+        return Resultado("bd-borrar", "CADENA ROTA", obtenido)
+    asegurar_historial(ctx, MIN_HISTORIAL_BD)
     antes = _estados(ctx.historial(SENSOR_BD))
-    fila = _registro_intermedio(ctx)
+    fila = _elegir_registro(ctx, "borrar")
     ctx.out.campo("Qué hace", f"DELETE directo en SQLite del registro de {SENSOR_BD} seq {fila['seq']} "
-                  "(intermedio)")
+                  "(intermedio, distinto del alterado)")
     guardar_restauracion(ctx, {"tipo": "fila", "fila": dict(fila)})
     with closing(ctx.conectar_bd()) as con, con:
         con.execute("DELETE FROM mediciones WHERE sensor_id = ? AND seq = ?", (SENSOR_BD, fila["seq"]))
@@ -402,8 +501,8 @@ def _fin_bd(ctx: Contexto, args) -> None:
     if getattr(args, "restaurar", False) or getattr(args, "_restaurar_auto", False):
         restaurar(ctx)
     else:
-        ctx.out.nota("Daño dejado en la BD (visible con 'Verificar historial' en el dashboard). "
-                     "Deshacer: scripts/ataques.py restaurar")
+        ctx.out.nota("Daño dejado en la BD real. En el dashboard: seleccionar sensor-02 → "
+                     "'Verificar historial completo del sensor'. Deshacer: scripts/demo.sh restaurar")
 
 
 # ---------------------------------------------------------------- todos
@@ -489,7 +588,7 @@ def main(argv: list[str] | None = None) -> int:
                  ("cadena-rota", "altera el hash del último registro -> CADENA ROTA en la ingesta")):
         nuevo(n, h).add_argument("--restaurar", action="store_true", help="deshace el daño al terminar")
     nuevo("todos", "todos los ataques en orden + tabla resumen (restaura la BD al terminar cada uno)")
-    nuevo("restaurar", "deshace el daño en BD dejado por ataques previos")
+    nuevo("restaurar", "deshace el daño en BD de sensor-02 (nunca toca sensor-01) y verifica su historial")
     args = p.parse_args(argv)
 
     out = Salida(color=not args.no_color and sys.stdout.isatty() and "NO_COLOR" not in os.environ)
@@ -497,7 +596,7 @@ def main(argv: list[str] | None = None) -> int:
         ctx = Contexto(Path(args.env), args.cacert, args.url, out)
         with closing(ctx.http):
             if args.cmd == "restaurar":
-                return restaurar(ctx)
+                return restaurar(ctx, verificar=True)
             if args.cmd == "todos":
                 ataque_todos(ctx, args)
                 return 0 if all(r.ok for r in args._resultados) else 1

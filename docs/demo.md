@@ -50,10 +50,10 @@ Los comandos de ataque usan `scripts/demo.sh ataque <subcomando>`, que llama a `
 3. Si la BD tiene daño de ensayos anteriores, deshacerlo:
 
    ```bash
-   scripts/demo.sh ataque restaurar
+   scripts/demo.sh restaurar
    ```
 
-   Salida: `BD restaurada (1 operación(es) deshecha(s)).` (o `No hay daños en BD pendientes de restaurar.`)
+   Salida: `BD restaurada (N operación(es) de sensor-02 deshecha(s)).` (o `No hay daños en BD pendientes de restaurar.`) seguida de `Historial : sensor-02 integro=true`.
 
 4. Solo si todo está inconsistente: `scripts/demo.sh reset && scripts/demo.sh up`.
    **Ojo:** `reset` borra el certificado, así que hay que volver a aceptarlo en el navegador.
@@ -195,65 +195,97 @@ sensor no queda bloqueado: la seq 2 entra después como VERIFICADA."
 
 ### 2.6 BD: alterar valor → MANIPULADA (dashboard)
 
+Los daños a la BD se dejan puestos (no se deshacen solos) para poder enseñarlos en el dashboard. Se hacen
+sobre **sensor-02**; sensor-01 sigue enviando y no se toca.
+
 ```bash
-scripts/demo.sh ataque bd-alterar-valor
+scripts/demo.sh bd-alterar
 ```
 
 Salida esperada (recortada):
 
 ```
 === ATAQUE: bd-alterar-valor (atacante con escritura en la BD edita un valor) ===
-  Qué hace  : UPDATE directo en SQLite: valor de sensor-02 seq 3 21.900 -> 31.900 (el tag y los hashes quedan como estaban)
+  Qué hace  : UPDATE directo en SQLite: valor de sensor-02 seq 3 22.230 -> 32.230 (el tag y los hashes quedan como estaban)
   Acción    : POST /api/sensores/sensor-02/verificar-historial
-  Historial : integro=false (4 registros)
+  Historial : integro=false (6 registros)
     seq 3   : MANIPULADA (HMAC inválido (contenido alterado))
-  Daño dejado en la BD (visible con 'Verificar historial' en el dashboard). Deshacer: scripts/ataques.py restaurar
+  El HMAC del registro editado ya no cuadra; el resto de la cadena sigue íntegra.
+  Daño dejado en la BD real. En el dashboard: seleccionar sensor-02 → 'Verificar historial completo del sensor'. Deshacer: scripts/demo.sh restaurar
 
   Esperado: MANIPULADA | Obtenido: MANIPULADA -> OK
 ```
 
-**Dashboard:** seleccionar sensor-02 y pulsar **"Verificar historial completo del sensor"**. Debe aparecer
-el registro seq 3 como MANIPULADA.
+**Dashboard:** elegir **sensor-02** y pulsar **"Verificar historial completo del sensor"**. Debe aparecer
+el registro seq 3 (≈ 1/3 del historial) como MANIPULADA y nada más.
 
 **Qué decir:** "Ahora el atacante tiene escritura en la base de datos y cambia un valor. El HMAC de ese
 registro ya no cuadra. El resto de la cadena sigue íntegro, así que el sistema lo localiza."
 
-Deshacer antes del siguiente ataque:
-
-```bash
-scripts/demo.sh ataque restaurar
-```
-
 **Qué demuestra:** que la alteración directa en la BD se detecta con la re-verificación del historial.
 
-### 2.7 BD: borrar → CADENA ROTA (dashboard)
+### 2.7 BD: borrar → además CADENA ROTA (dashboard)
+
+Sin restaurar, se suma el segundo daño:
 
 ```bash
-scripts/demo.sh ataque bd-borrar
+scripts/demo.sh bd-borrar
 ```
 
 Salida esperada (recortada):
 
 ```
 === ATAQUE: bd-borrar (atacante con escritura en la BD borra una medición) ===
-  Qué hace  : DELETE directo en SQLite del registro de sensor-02 seq 3 (intermedio)
+  Qué hace  : DELETE directo en SQLite del registro de sensor-02 seq 5 (intermedio, distinto del alterado)
   Acción    : POST /api/sensores/sensor-02/verificar-historial
-  Historial : integro=false (3 registros)
-    seq 4   : CADENA ROTA (hueco de secuencia: esperaba 3, hay 4; enlace roto: hash_prev no coincide con el hash del anterior)
+  Historial : integro=false (5 registros)
+    seq 3   : MANIPULADA (HMAC inválido (contenido alterado))
+    seq 6   : CADENA ROTA (hueco de secuencia: esperaba 5, hay 6; enlace roto: hash_prev no coincide con el hash del anterior)
+  Daño dejado en la BD real. En el dashboard: seleccionar sensor-02 → 'Verificar historial completo del sensor'. Deshacer: scripts/demo.sh restaurar
+
   Esperado: CADENA ROTA | Obtenido: CADENA ROTA -> OK
 ```
 
-**Dashboard:** con sensor-02 seleccionado, "Verificar historial completo del sensor" muestra seq 4 como CADENA ROTA.
+**Dashboard:** pulsar de nuevo "Verificar historial completo del sensor" con sensor-02 seleccionado. Ahora se
+ven **a la vez** seq 3 como MANIPULADA y seq 6 (el registro siguiente al borrado, seq 5) como CADENA ROTA.
 
-**Qué decir:** "Borré un registro intermedio. El siguiente apunta por hash a un eslabón que ya no existe."
+Los dos registros se eligen para no pisarse: alterar cae en ≈ 1/3 del historial, borrar en ≈ 2/3, nunca el
+primero ni el último, y el alterado nunca queda justo después de un hueco (su MANIPULADA taparía el
+CADENA ROTA). Si se repite `bd-alterar` o `bd-borrar` con el daño ya puesto, avisa "Ya aplicado" y no lo duplica.
 
-Deshacer:
-
-```bash
-scripts/demo.sh ataque restaurar
-```
+**Qué decir:** "Borré un registro intermedio. El siguiente apunta por hash a un eslabón que ya no existe: la
+cadena se rompe justo ahí, y la edición anterior sigue marcada."
 
 **Qué demuestra:** que el borrado también se detecta, por la cadena de hashes.
+
+### 2.7b Restaurar → íntegro
+
+```bash
+scripts/demo.sh restaurar
+```
+
+Salida esperada:
+
+```
+  BD restaurada (2 operación(es) de sensor-02 deshecha(s)).
+  Historial : sensor-02 integro=true (6 registros)
+```
+
+**Dashboard:** "Verificar historial completo del sensor" → íntegro, todos VERIFICADA.
+
+`restaurar` deshace solo el daño de sensor-02 (ignora con aviso cualquier operación de otro sensor y nunca
+toca sensor-01); el servidor y el simulador siguen corriendo, así que sirve para **repetir** la demo
+(`bd-alterar` → `bd-borrar` → `restaurar`) tantas veces como haga falta. Si no hay nada pendiente pero el
+historial de sensor-02 no está íntegro (p. ej. se perdió `demo-run/ataques-restaurar.json`), lo dice y sugiere
+`scripts/demo.sh reset && scripts/demo.sh up`.
+
+Diferencia con `reset`: `restaurar` solo repara la BD de sensor-02; `reset` detiene todo y borra `demo-run/`
+completo (BD, llaves, contraseña y certificado).
+
+**Por qué `scripts/demo.sh ataque todos` deja todo íntegro:** `todos` ejecuta los 9 ataques en orden y
+**autorestaura** cada ataque a la BD al terminar (así es repetible y siempre da 9/9). Al acabar, ambos
+historiales salen íntegros en el dashboard. Para *enseñar* el daño en el dashboard usar `bd-alterar` y
+`bd-borrar`, que sí lo dejan.
 
 ### 2.8 BD: cadena rota → CADENA ROTA en la ingesta (cierre del bloque)
 
@@ -278,7 +310,7 @@ El servidor se niega a encadenar sobre una base corrupta. Por eso sensor-02 qued
 Restaurar:
 
 ```bash
-scripts/demo.sh ataque restaurar
+scripts/demo.sh restaurar
 ```
 
 **Nota para el presentador:** tras `cadena-rota`, el "último estado" de sensor-02 en el dashboard queda como
@@ -376,13 +408,13 @@ bandit: bandit 1.9.4
 pip-audit: pip-audit 2.10.1
 -- bandit (vigia/ y scripts/) --
 	No issues identified.
-	Total lines of code: 1589
+	Total lines of code: 1670
 -- pip-audit (dependencias) --
 No known vulnerabilities found
 Regenerar: scripts/analisis_estatico.sh
 ```
 
-**Qué decir:** "Bandit sobre 1589 líneas de la aplicación: cero hallazgos. pip-audit sobre las dependencias:
+**Qué decir:** "Bandit sobre 1670 líneas de la aplicación: cero hallazgos. pip-audit sobre las dependencias:
 cero vulnerabilidades conocidas. Es un reporte generado antes de la demo; se regenera con `scripts/analisis_estatico.sh`."
 
 **Qué demuestra:** revisión estática y de dependencias, además de las pruebas.
@@ -408,8 +440,8 @@ scripts/demo.sh down
 |---|---|
 | El dashboard no carga o pide certificado | Aceptar el certificado (paso 0.2). Como alternativa: `curl --cacert ./demo-run/certs/cert.pem https://127.0.0.1:8443/api/sensores` (devuelve JSON). |
 | El servidor no responde | `scripts/demo.sh status`; ver el log con `scripts/demo.sh logs` (Ctrl-C para salir); reiniciar con `scripts/demo.sh down && scripts/demo.sh up`. |
-| Un ataque da ERROR o un estado distinto | `scripts/demo.sh ataque restaurar` y repetirlo. |
-| sensor-02 queda bloqueado (CADENA ROTA en la ingesta) | `scripts/demo.sh ataque restaurar`. |
+| Un ataque da ERROR o un estado distinto | `scripts/demo.sh restaurar` y repetirlo. |
+| sensor-02 queda bloqueado (CADENA ROTA en la ingesta) | `scripts/demo.sh restaurar`. |
 | Puerto 8443 ocupado | `VIGIA_PORT=9443 scripts/demo.sh reset && VIGIA_PORT=9443 scripts/demo.sh up`; la URL pasa a https://127.0.0.1:9443 (aceptar el certificado de nuevo). |
 | Sin tiempo o sin navegador: resumen completo | `scripts/demo.sh ataque todos`. Ejecuta los 9 ataques en orden (restaura la BD entre ellos) y muestra una tabla RESUMEN con `Todos los estados coinciden con lo esperado.` |
 | El gráfico no aparece | Chart.js viene de un CDN; sin red el dashboard funciona sin gráfico. Usar la tabla y la salida de terminal. |
