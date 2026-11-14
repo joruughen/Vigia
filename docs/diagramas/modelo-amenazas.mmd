@@ -1,7 +1,7 @@
 flowchart LR
     subgraph ATAQ["Atacante"]
-        A1["Red / MITM<br/>lee, modifica, retiene o descarta mensajes"]
         A2["Sensor falso<br/>id inexistente, o id válido sin la llave K"]
+        A1["Red / MITM<br/>lee, modifica, retiene o descarta mensajes"]
         A3["Replay<br/>reenvía un mensaje auténtico ya capturado"]
         A4["Insider con acceso de escritura a la BD<br/>sin la contraseña maestra ni acceso a sensores/"]
         A5["Ladrón de la BD o de un backup<br/>copia el archivo"]
@@ -10,17 +10,17 @@ flowchart LR
     end
 
     subgraph DEF["Defensa implementada"]
-        D1["TLS 1.3 mínimo forzado<br/>confidencialidad e integridad en tránsito<br/>autentica al servidor"]
         D2["HMAC-SHA256 con K por sensor<br/>comparación en tiempo constante<br/>pasos 1 y 2: FALSA, MANIPULADA"]
+        D1["TLS 1.3 mínimo forzado<br/>confidencialidad e integridad en tránsito<br/>autentica al servidor"]
         D3["seq estricta +1 y ventana de 30 s<br/>pasos 3 y 4: REPLAY O HUECO,<br/>FUERA DE VENTANA"]
         D4["Cadena SHA-256 con el tag<br/>paso 5 re-verifica hash y HMAC del último<br/>Verificar historial completo: MANIPULADA, CADENA ROTA"]
-        D5["AES-256-GCM con AAD = id<br/>KEK = Argon2id, salt único<br/>parámetros con mínimos y máximos<br/>contraseña de 16 o más caracteres"]
         D6["eventos: tag solo si VERIFICADA<br/>huella SHA-256 si fue rechazada<br/>nadie puede copiar un tag auténtico rechazado"]
+        D5["AES-256-GCM con AAD = id<br/>KEK = Argon2id, salt único<br/>parámetros con mínimos y máximos<br/>contraseña de 16 o más caracteres"]
     end
 
     subgraph RES["Riesgo residual"]
-        R1["Disponibilidad: corte o retención<br/>retraso aceptado dentro de 30 s<br/>sin alerta por silencio de un sensor"]
         R2["Sin autenticación en la API<br/>lectura de datos, inundación de eventos<br/>DoS no cubierto"]
+        R1["Disponibilidad: corte o retención<br/>retraso aceptado dentro de 30 s<br/>sin alerta por silencio de un sensor"]
         R3["Truncado de las últimas mediciones<br/>no se ve en el historial, solo como hueco<br/>sin ancla externa"]
         R4["eventos editable, no encadenado<br/>mediciones, tags y hashes en claro<br/>sin confidencialidad"]
         R5["Ataque de diccionario offline<br/>a la contraseña maestra"]
@@ -29,10 +29,10 @@ flowchart LR
 
     OUT["FUERA DE ALCANCE<br/>hardware del sensor, almacén seguro de llaves<br/>DoS, firmas Ed25519 y ESP32"]
 
-    A1 -->|"espía o modifica en tránsito"| D1
-    A1 -->|"modifica si TLS termina en un proxy"| D2
-    A1 -->|"retiene o descarta"| D3
     A2 -->|"sin la llave K"| D2
+    A1 -->|"modifica si TLS termina en un proxy"| D2
+    A1 -->|"espía o modifica en tránsito"| D1
+    A1 -->|"retiene o descarta"| D3
     A3 -->|"otra sesión TLS, mismo mensaje"| D3
     A4 -->|"edita, borra o inserta mediciones"| D4
     A4 -->|"copia tags desde eventos"| D6
@@ -41,14 +41,14 @@ flowchart LR
     A6 -->|"descifra K con la KEK"| R6
     A7 -.->|"sin defensa"| OUT
 
-    D1 --> R1
-    D1 --> R2
     D2 --> R2
+    D1 --> R2
+    D1 --> R1
     D3 --> R1
     D4 --> R3
     D4 --> R4
-    D5 --> R5
     D6 --> R4
+    D5 --> R5
 
     classDef atac fill:#f8d7da,stroke:#c62828,color:#000
     classDef def fill:#d4edda,stroke:#2e7d32,color:#000

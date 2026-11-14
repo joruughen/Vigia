@@ -1,58 +1,28 @@
 flowchart TD
-    IN["POST /api/mediciones<br/>JSON del sensor"] --> FMT{"Formato válido?<br/>tipos estrictos, longitudes,<br/>regex canónicas de id, seq, ts, valor"}
-    FMT -->|"No"| E422["HTTP 422<br/>NO se guarda evento ni medición"]
-    FMT -->|"Sí"| TX["BEGIN IMMEDIATE<br/>transacción atómica por BD"]
-    TX --> KEYQ["Buscar el sensor; K se descifra con la KEK solo si está activo<br/>AES-256-GCM, AAD con el id<br/>inexistente o revocado: sin llave"]
-    KEYQ --> LAST["Leer el último registro guardado del sensor<br/>ORDER BY seq DESC LIMIT 1"]
-    LAST --> P1
-    KEYQ -.->|"blob de K alterado: falla GCM"| E500["ROLLBACK y HTTP 500 genérico<br/>no se guarda evento"]
-
-    subgraph PASOS["verificar_medicion - se detiene en el primer fallo"]
-        P1{"Paso 1<br/>Sensor registrado y activo?"}
-        P2{"Paso 2<br/>HMAC válido?<br/>hmac.compare_digest, tiempo constante"}
-        P3{"Paso 3<br/>seq = última + 1<br/>o seq = 1 si no hay registros?"}
-        P4{"Paso 4<br/>Diferencia absoluta entre hora del servidor<br/>y timestamp menor o igual que la ventana?"}
-        P5{"Paso 5<br/>Último registro guardado consistente?<br/>recalcular su hash y re-verificar su HMAC"}
-        P1 -->|"Sí"| P2
-        P2 -->|"Sí"| P3
-        P3 -->|"Sí"| P4
-        P4 -->|"Sí"| P5
-    end
-
-    P1 -->|"No: id inexistente o revocado"| FALSA["FALSA"]
+    IN["POST /api/mediciones<br/>JSON del sensor"] --> FMT{"Formato<br/>válido?"}
+    FMT -->|"No"| E422["HTTP 422<br/>no se guarda nada"]
+    FMT -->|"Sí"| TX["BEGIN IMMEDIATE<br/>descifra K si el sensor está activo<br/>lee el último registro"]
+    TX -.->|"blob de K alterado"| E500["ROLLBACK<br/>HTTP 500 genérico"]
+    TX --> P1{"1. Sensor<br/>registrado<br/>y activo?"}
+    P1 -->|"No"| FALSA["FALSA"]
+    P1 -->|"Sí"| P2{"2. HMAC<br/>válido?"}
     P2 -->|"No"| MANIP["MANIPULADA"]
-    P3 -->|"No, seq menor: replay<br/>seq mayor: hueco"| REPLAY["REPLAY O HUECO<br/>el motivo queda en el campo detalle"]
-    P4 -->|"No"| VENT["FUERA DE VENTANA"]
-    P5 -->|"No: hash recalculado distinto<br/>o HMAC del último inválido"| ROTA["CADENA ROTA"]
-    P5 -->|"Sí"| HASH["Calcular el nuevo eslabón:<br/>h_i = SHA256( h_prev ‖ mensaje canónico ‖ tag )<br/>h_prev = hash del último registro, o 32 bytes en cero si es el primero<br/>h_prev y tag como bytes crudos de 32 B"]
+    P2 -->|"Sí"| P3{"3. seq =<br/>última + 1?"}
+    P3 -->|"No"| REPLAY["REPLAY O HUECO"]
+    P3 -->|"Sí"| P4{"4. Dentro<br/>de la ventana?"}
+    P4 -->|"No"| VENT["FUERA DE<br/>VENTANA"]
+    P4 -->|"Sí"| P5{"5. Último registro<br/>consistente?<br/>hash y HMAC"}
+    P5 -->|"No"| ROTA["CADENA ROTA"]
+    P5 -->|"Sí"| HASH["h_i = SHA256<br/>h_prev ‖ mensaje ‖ tag"]
     HASH --> OK["VERIFICADA"]
-
-    OK --> INSM["INSERT en mediciones<br/>valor, tag, hash_prev, hash"]
+    OK --> INSM["INSERT en mediciones"]
     INSM --> EVT
-    FALSA --> EVT
-    MANIP --> EVT
-    REPLAY --> EVT
-    VENT --> EVT
-    ROTA --> EVT
-    EVT["INSERT en eventos<br/>TODO intento con formato válido, con su estado y detalle<br/>campo tag: el tag HMAC si VERIFICADA,<br/>huella sha256 del tag si fue rechazada"] --> COM["COMMIT"]
-    COM --> RESP["Respuesta HTTP 200<br/>estado y detalle"]
-
-    subgraph HISTORIAL["Verificar historial completo del sensor - botón del dashboard"]
-        H0["POST /api/sensores/ID/verificar-historial<br/>lee TODOS los registros ordenados por seq<br/>K se descifra también si el sensor está revocado"] --> H1["Recorrer cada registro<br/>comparándolo con el anterior tal como está guardado<br/>hash_anterior inicial = 32 bytes en cero, seq esperado inicial = 1"]
-        H1 --> H2{"Formato válido,<br/>id del registro = id del sensor<br/>y HMAC válido?"}
-        H2 -->|"No"| H3["MANIPULADA en ese registro"]
-        H2 -->|"Sí"| H4{"seq = esperado,<br/>hash_prev = hash del anterior<br/>y hash recalculado = hash guardado?"}
-        H4 -->|"No"| H5["CADENA ROTA con el motivo<br/>hueco de secuencia, enlace roto o hash distinto"]
-        H4 -->|"Sí"| H6["VERIFICADA en ese registro"]
-        H3 --> H7["Reporte: integro solo si TODOS los registros son VERIFICADA"]
-        H5 --> H7
-        H6 --> H7
-    end
-    H7 --> NOTAH["El reporte se devuelve al dashboard<br/>no se escribe en mediciones ni en eventos"]
+    FALSA & MANIP & REPLAY & VENT & ROTA --> EVT
+    EVT["INSERT en eventos<br/>tag si VERIFICADA<br/>huella si rechazada"] --> COM["COMMIT<br/>HTTP 200 con estado"]
 
     classDef bueno fill:#d4edda,stroke:#2e7d32,color:#000
     classDef malo fill:#f8d7da,stroke:#c62828,color:#000
     classDef aviso fill:#fff3cd,stroke:#b58900,color:#000
-    class OK,H6 bueno
-    class FALSA,MANIP,REPLAY,VENT,ROTA,H3,H5 malo
+    class OK bueno
+    class FALSA,MANIP,REPLAY,VENT,ROTA malo
     class E422,E500 aviso

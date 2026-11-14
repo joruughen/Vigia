@@ -1,0 +1,14 @@
+flowchart TD
+    H0["POST /api/sensores/ID/verificar-historial<br/>lee todos los registros por seq<br/>también si el sensor está revocado"] --> H1["Para cada registro,<br/>comparado con el anterior<br/>tal como está guardado<br/>hash inicial = 32 bytes en cero<br/>seq esperado inicial = 1"]
+    H1 --> H2{"Formato válido,<br/>id del sensor<br/>y HMAC válido?"}
+    H2 -->|"No"| H3["MANIPULADA<br/>en ese registro"]
+    H2 -->|"Sí"| H4{"seq esperado,<br/>hash_prev = hash anterior<br/>y hash recalculado = guardado?"}
+    H4 -->|"No"| H5["CADENA ROTA<br/>hueco, enlace roto<br/>o hash distinto"]
+    H4 -->|"Sí"| H6["VERIFICADA<br/>en ese registro"]
+    H3 & H5 & H6 --> H7["Reporte: íntegro solo si<br/>TODOS son VERIFICADA"]
+    H7 --> NOTAH["Se devuelve al dashboard<br/>no se escribe en mediciones ni en eventos"]
+
+    classDef bueno fill:#d4edda,stroke:#2e7d32,color:#000
+    classDef malo fill:#f8d7da,stroke:#c62828,color:#000
+    class H6 bueno
+    class H3,H5 malo

@@ -1,0 +1,45 @@
+flowchart TD
+    subgraph ADMIN["Host de administración"]
+        ENV[".env<br/>contraseña maestra"]
+        CLI["CLI<br/>init, registrar-sensor"]
+        KEYF[("sensores/ID.key<br/>K en claro, 0600")]
+    end
+
+    subgraph SENSOR["Sensor simulado"]
+        S1["Mensaje canónico<br/>+ HMAC-SHA256 con K"]
+    end
+
+    TLS{{"TLS 1.3 mínimo forzado<br/>autentica al servidor"}}
+
+    subgraph SERVIDOR["Servidor FastAPI"]
+        API["API y verificador<br/>5 pasos"]
+        KEK["KEK Argon2id<br/>solo en memoria"]
+        DASH["Dashboard"]
+    end
+
+    subgraph BD["SQLite, permiso 0600"]
+        T1[("meta<br/>salt, parámetros, canario")]
+        T2[("sensores<br/>K cifrada AES-256-GCM")]
+        T3[("mediciones<br/>en claro, HMAC y cadena")]
+        T4[("eventos<br/>sin cadena")]
+    end
+
+    ENV -->|"contraseña"| CLI
+    CLI -->|"escribe K"| KEYF
+    CLI -->|"salt y canario"| T1
+    CLI -->|"K cifrada"| T2
+    KEYF -->|"lee K"| S1
+    S1 -->|"JSON con tag, HTTPS"| TLS
+    TLS --> API
+    ENV -->|"contraseña"| KEK
+    T1 -->|"salt y parámetros"| KEK
+    KEK -.->|"descifra K"| API
+    API -->|"lee K"| T2
+    API -->|"solo VERIFICADAS"| T3
+    API -->|"todo intento"| T4
+    DASH -->|"consulta y verifica historial"| API
+
+    classDef sec fill:#d4edda,stroke:#2e7d32,color:#000
+    classDef claro fill:#fff3cd,stroke:#b58900,color:#000
+    class T2,KEK sec
+    class KEYF,T3,T4 claro
