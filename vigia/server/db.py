@@ -12,6 +12,7 @@ from typing import Iterator
 from argon2.exceptions import HashingError
 
 from vigia.crypto import keystore
+from vigia.crypto.mac import huella_tag
 from vigia.crypto.chain import GENESIS
 from vigia.crypto.verifier import (Estado, Medicion, RegistroGuardado, Resultado,
                                    verificar_medicion)
@@ -45,7 +46,7 @@ CREATE TABLE IF NOT EXISTS eventos (
     seq          INTEGER NOT NULL,
     timestamp_ms INTEGER NOT NULL,
     valor        TEXT NOT NULL,
-    tag          TEXT NOT NULL,
+    tag          TEXT NOT NULL,  -- VERIFICADA: tag HMAC; rechazadas: huella 'sha256:<hex>' del tag
     estado       TEXT NOT NULL,
     detalle      TEXT NOT NULL,
     recibido_ms  INTEGER NOT NULL
@@ -141,7 +142,7 @@ class Database:
             if not isinstance(params, dict):
                 raise ValueError("kdf_params no es un objeto JSON")
             kek = keystore.derivar_kek(contrasena, salt, params)
-        except (ValueError, TypeError, HashingError) as exc:
+        except (ValueError, TypeError, OverflowError, MemoryError, HashingError) as exc:
             # JSONDecodeError y UnicodeDecodeError son subclases de ValueError.
             raise ArranqueError(
                 "Parámetros Argon2id (kdf_params) o salt de la base de datos inválidos o por debajo "
@@ -241,10 +242,15 @@ class Database:
                         (m.sensor_id, m.seq, m.timestamp_ms, m.valor, m.tag,
                          ultimo.hash if ultimo else GENESIS, res.hash_nuevo),
                     )
+                # N1: en eventos solo se guarda el tag completo si la medición fue VERIFICADA
+                # (ya está en mediciones). En las rechazadas se guarda su huella SHA-256: un
+                # insider con acceso a la BD no puede copiar el tag de un mensaje auténtico
+                # rechazado (p.ej. FUERA DE VENTANA) a mediciones para "promoverlo".
+                tag_evento = m.tag if res.estado == Estado.VERIFICADA else huella_tag(m.tag)
                 con.execute(
                     "INSERT INTO eventos (sensor_id, seq, timestamp_ms, valor, tag, estado, detalle, recibido_ms)"
                     " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (m.sensor_id, m.seq, m.timestamp_ms, m.valor, m.tag,
+                    (m.sensor_id, m.seq, m.timestamp_ms, m.valor, tag_evento,
                      res.estado.value, res.detalle, ahora),
                 )
                 con.execute("COMMIT")

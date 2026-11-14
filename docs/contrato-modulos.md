@@ -48,6 +48,7 @@ def mensaje_canonico(sensor_id: str, seq: int, timestamp_ms: int, valor: str) ->
 # vigia/crypto/mac.py
 def generar_llave_sensor() -> bytes                              # 32 bytes, secrets/os.urandom
 def calcular_tag(llave: bytes, mensaje: bytes) -> str            # hex
+def huella_tag(tag_hex: str) -> str                              # "sha256:<64 hex>"; nunca lanza (acepta tags inválidos); también en vigia.crypto
 def verificar_tag(llave: bytes, mensaje: bytes, tag_hex: str) -> bool   # tiempo constante, False si hex inválido
 
 # vigia/crypto/chain.py
@@ -58,7 +59,12 @@ def siguiente_hash(hash_prev_hex: str, mensaje: bytes, tag_hex: str) -> str
 class ContrasenaIncorrecta(Exception): ...
 PARAMS_ARGON2: dict                                              # time_cost, memory_cost (KiB), parallelism, hash_len=32
 def nuevo_salt() -> bytes                                        # 16 bytes aleatorios
-def derivar_kek(contrasena: str, salt: bytes) -> bytes           # Argon2id -> 32 bytes
+def derivar_kek(contrasena: str, salt: bytes, params: dict | None = None) -> bytes   # Argon2id -> 32 bytes
+    # params=None usa PARAMS_ARGON2; si vienen (kdf_params de la BD) se validan con validar_params_argon2:
+    # ValueError si faltan/sobran claves, no son enteros, están por DEBAJO de MIN_ARGON2
+    # (time_cost>=2, memory_cost>=19456 KiB, parallelism>=1) o por ENCIMA de MAX_ARGON2
+    # (time_cost<=10, memory_cost<=1048576 KiB = 1 GiB, parallelism<=64). Salt < 16 B o contraseña vacía -> ValueError.
+def validar_params_argon2(params: dict) -> dict                  # mínimos y máximos; ValueError
 def cifrar_llave_sensor(kek: bytes, sensor_id: str, llave: bytes) -> tuple[bytes, bytes]  # (nonce 12B nuevo, ciphertext+tag); AAD = sensor_id
 def descifrar_llave_sensor(kek: bytes, sensor_id: str, nonce: bytes, ct: bytes) -> bytes   # InvalidTag -> ContrasenaIncorrecta
 def crear_canario(kek: bytes) -> tuple[bytes, bytes]             # para validar la contraseña al arrancar
@@ -89,7 +95,9 @@ def verificar_medicion(m: Medicion, llave: bytes | None, ultimo: RegistroGuardad
     # 2 HMAC inválido -> MANIPULADA
     # 3 seq != ultimo.seq+1 (o 1 si no hay último) -> REPLAY O HUECO (detalle "replay"/"hueco")
     # 4 |ahora_ms - timestamp_ms| > ventana_ms -> FUERA DE VENTANA
-    # 5 recalcular hash del último registro guardado (hash_prev + canónico + tag) != ultimo.hash -> CADENA ROTA
+    # 5 re-verificar el último registro guardado: (a) formato canónico válido, (b) hash recalculado
+    #   (hash_prev + canónico + tag) == ultimo.hash y (c) su HMAC con la llave K sigue siendo válido;
+    #   cualquier fallo -> CADENA ROTA
     # todo ok -> VERIFICADA con hash_nuevo = siguiente_hash(ultimo.hash o GENESIS, ...)
 
 @dataclass(frozen=True)
@@ -108,6 +116,16 @@ def verificar_historial(sensor_id: str, registros: list[RegistroGuardado], llave
 ## 5. Responsabilidades de la aplicación (app-dev)
 
 - SQLite (`vigia/server/db.py`): tablas `meta` (salt Argon2, parámetros, canario), `sensores` (id, nonce, llave cifrada, activo, creado), `mediciones` (cadena verificada, `UNIQUE(sensor_id, seq)`), `eventos` (todo intento recibido con estado y detalle).
+- Regla de `eventos` (N1): el campo `tag` de `eventos` guarda el **tag HMAC completo solo si el estado es
+  VERIFICADA** (ya está en `mediciones`); para cualquier otro estado guarda `huella_tag(m.tag)`
+  (`"sha256:<64 hex>"`), nunca el tag. Así un insider con acceso a la BD no puede copiar el tag de un
+  mensaje auténtico rechazado (p.ej. FUERA DE VENTANA) de `eventos` a `mediciones` para promoverlo. La API
+  (`/api/eventos`, `/api/sensores/{id}/eventos`) lo expone con el mismo nombre `tag`: es HMAC si
+  `estado == "VERIFICADA"` y huella (empieza por `sha256:`) en caso contrario; el dashboard lo rotula
+  "HMAC" / "huella" según el estado.
+- Si al derivar la KEK los `kdf_params` de la BD son inválidos (ValueError, TypeError, OverflowError,
+  MemoryError o HashingError de argon2), el arranque falla con `ArranqueError` ("parámetros Argon2id ... inválidos"),
+  distinto del error de contraseña incorrecta.
 - La ingesta es atómica por sensor (transacción `BEGIN IMMEDIATE`): leer último → verificar → insertar.
 - CLI `python -m vigia.cli init | registrar-sensor <id> | revocar-sensor <id> | listar-sensores`.
   `registrar-sensor` guarda la llave cifrada en la BD y escribe la llave en claro **solo** en `sensores/<id>.key` (permiso 0600, gitignored) para simular la entrega fuera de banda.

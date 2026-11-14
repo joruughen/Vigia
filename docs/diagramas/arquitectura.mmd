@@ -1,0 +1,49 @@
+flowchart LR
+    subgraph SENSOR["Simulador de sensor - vigia/sensor.py"]
+        S1["Genera la medición y calcula<br/>HMAC-SHA256 con la llave K"]
+        SEQF[("sensores/ID.seq<br/>último seq verificado")]
+    end
+
+    TLS{{"Canal TLS 1.3 (versión mínima forzada)<br/>cifra y autentica en tránsito<br/>el sensor verifica el certificado del servidor con --cacert"}}
+
+    subgraph SERVIDOR["Servidor: uvicorn + FastAPI - vigia/server/app.py"]
+        API["POST /api/mediciones<br/>valida formato canónico y verifica en 5 pasos"]
+        KEKMEM["KEK de 32 B<br/>derivada al arrancar, solo en memoria<br/>K se descifra bajo demanda en cada petición"]
+        HIST["POST /api/sensores/ID/verificar-historial<br/>re-verifica HMAC y cadena completa"]
+        CONSULTAS["GET /api/sensores, /eventos, /serie<br/>sin autenticación<br/>escucha en 127.0.0.1 por defecto, VIGIA_HOST lo cambia"]
+        DASH["Dashboard estático<br/>HTML, JS y CSS servidos por la misma app"]
+    end
+
+    subgraph BD["SQLite data/vigia.db - permiso 0600"]
+        TMETA[("meta<br/>kdf_salt 16 B, kdf_params JSON<br/>canario_nonce y canario_ct<br/>no son secretos, permiten validar la contraseña")]
+        TSENS[("sensores<br/>id, nonce 12 B, llave_cifrada, activo<br/>K cifrada con AES-256-GCM")]
+        TMED[("mediciones<br/>solo VERIFICADAS, valor en claro<br/>tag HMAC, hash_prev, hash<br/>protegida por HMAC + cadena SHA-256<br/>detecta alteración del último registro al ingerir<br/>y de los intermedios con Verificar historial<br/>el truncado no se detecta")]
+        TEV[("eventos<br/>todo intento con formato válido<br/>estado y detalle, sin cadena de hashes<br/>tag HMAC solo si VERIFICADA<br/>huella SHA-256 del tag si fue rechazada")]
+    end
+
+    subgraph ADMIN["Host de administración"]
+        KEYF[("sensores/ID.key<br/>K de 32 B en hex, permiso 0600<br/>EN CLARO: la escribe la CLI al registrar<br/>entrega fuera de banda simulada<br/>no se borra después")]
+        CLI["CLI vigia.cli<br/>init, registrar-sensor,<br/>revocar-sensor, listar-sensores"]
+        ENVF[".env<br/>VIGIA_MASTER_PASSWORD<br/>mínimo 16 caracteres, fuera del repo"]
+    end
+
+    S1 -->|"lee K"| KEYF
+    S1 -->|"lee y guarda seq"| SEQF
+    S1 -->|"JSON con tag HMAC, HTTPS"| TLS
+    TLS --> API
+    API -->|"descifra K con la KEK y AAD con el id"| TSENS
+    API -->|"lee el último registro<br/>inserta solo si VERIFICADA"| TMED
+    API -->|"inserta siempre el evento"| TEV
+    KEKMEM -.->|"se usa para descifrar"| TSENS
+    HIST -->|"lee todos los registros"| TMED
+    CONSULTAS --> TEV
+    CONSULTAS --> TMED
+    DASH -->|"fetch a la API por HTTPS"| CONSULTAS
+    DASH -->|"botón Verificar historial completo"| HIST
+
+    ENVF -->|"contraseña maestra"| CLI
+    ENVF -->|"contraseña maestra"| KEKMEM
+    TMETA -->|"salt, parámetros y canario<br/>Argon2id deriva la KEK, el canario valida"| KEKMEM
+    CLI -->|"init: salt, params y canario"| TMETA
+    CLI -->|"registrar: K cifrada"| TSENS
+    CLI -->|"registrar: escribe K en claro"| KEYF

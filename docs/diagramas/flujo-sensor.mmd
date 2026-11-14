@@ -1,0 +1,24 @@
+flowchart TD
+    A["Inicio: leer sensores/ID.key (hex de 32 B)<br/>y sensores/ID.seq (0 si no existe)"] --> B["siguiente = seq local + 1"]
+    B --> C["Medición: valor simulado como texto con 3 decimales<br/>timestamp_ms = hora actual en ms"]
+    C --> D["Mensaje canónico (UTF-8), campos validados antes de firmar:<br/>VIGIA-v1|id|seq|ts|valor"]
+    D --> E["tag = HMAC-SHA256 con K sobre el mensaje canónico<br/>en hex minúscula, 64 caracteres"]
+    E --> F["Payload JSON:<br/>sensor_id, seq, timestamp_ms, valor, tag"]
+    F --> G["POST /api/mediciones por TLS 1.3<br/>certificado del servidor verificado con --cacert<br/>nunca verify=False"]
+    G --> H["Servidor: verificación de 5 pasos<br/>ver flujo-verificacion.mmd"]
+    H --> I{"Respuesta HTTP 200 con estado"}
+
+    I -->|"VERIFICADA"| J["seq local = siguiente<br/>guardar_seq: escribe archivo .tmp y os.replace atómico"]
+    I -->|"REPLAY O HUECO con detalle replay:<br/>seq N menor o igual que la última M, con N = M = seq enviada"| K["El servidor ya tenía esa seq<br/>la respuesta original se perdió<br/>se avanza y se guarda la seq local"]
+    I -->|"REPLAY O HUECO en otro caso<br/>por ejemplo hueco"| L["Aviso de desincronización<br/>la seq NO avanza, re-sincronización manual"]
+    I -->|"FALSA, MANIPULADA, FUERA DE VENTANA o CADENA ROTA"| M["Se muestra el estado<br/>la seq NO avanza"]
+    I -->|"HTTP distinto de 200, por ejemplo 422"| N["Se muestra el error<br/>la seq NO avanza"]
+    G -.->|"error de conexión"| O["Se informa el error<br/>la seq NO avanza"]
+
+    J --> P["Esperar el intervalo y repetir"]
+    K --> P
+    L --> P
+    M --> P
+    N --> P
+    O --> P
+    P --> B

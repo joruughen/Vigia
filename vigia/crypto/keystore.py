@@ -49,6 +49,9 @@ def nuevo_salt() -> bytes:
 # kdf_params en la BD degrade la derivación (p.ej. t=1, m=8 KiB) para acelerar
 # un ataque de diccionario sobre la contraseña maestra.
 MIN_ARGON2: dict = {"time_cost": 2, "memory_cost": 19456, "parallelism": 1}
+# Cotas superiores: unos kdf_params manipulados en la BD no deben poder forzar una
+# derivación desproporcionada (DoS por CPU/RAM al abrir el almacén).
+MAX_ARGON2: dict = {"time_cost": 10, "memory_cost": 1048576, "parallelism": 64}  # 1 GiB
 _CLAVES_ARGON2 = frozenset(PARAMS_ARGON2)
 
 
@@ -71,6 +74,10 @@ def validar_params_argon2(params: dict) -> dict:
         if params[k] < minimo:
             raise ValueError(f"kdf_params.{k}={params[k]} por debajo del mínimo {minimo} "
                              "(posible degradación de Argon2id)")
+    for k, maximo in MAX_ARGON2.items():
+        if params[k] > maximo:
+            raise ValueError(f"kdf_params.{k}={params[k]} por encima del máximo {maximo} "
+                             "(posible DoS por parámetros Argon2id manipulados)")
     return {k: int(params[k]) for k in PARAMS_ARGON2}
 
 

@@ -1,4 +1,4 @@
-Run started:2026-11-14 19:20:19.964409+00:00
+Run started:2026-11-14 19:50:09.298534+00:00
 
 Test results:
 >> Issue: [B105:hardcoded_password_string] Possible hardcoded password: 'contrasena-de-prueba-NO-usar-en-produccion'
@@ -1594,21 +1594,452 @@ Test results:
 369	    assert _modo(sdir / "sensor-x.key") == 0o600
 
 --------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:24:4
+23	    h = huella_tag(tag)
+24	    assert RE_HUELLA.fullmatch(h)
+25	    assert len(h) == len("sha256:") + 64
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:25:4
+24	    assert RE_HUELLA.fullmatch(h)
+25	    assert len(h) == len("sha256:") + 64
+26	    assert huella_tag(tag) == h
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:26:4
+25	    assert len(h) == len("sha256:") + 64
+26	    assert huella_tag(tag) == h
+27	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:31:4
+30	    huellas = {huella_tag(secrets.token_hex(32)) for _ in range(50)}
+31	    assert len(huellas) == 50
+32	    assert huella_tag("a" * 64) != huella_tag("b" * 64)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:32:4
+31	    assert len(huellas) == 50
+32	    assert huella_tag("a" * 64) != huella_tag("b" * 64)
+33	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:39:8
+38	        h = huella_tag(tag)
+39	        assert tag not in h
+40	        assert h != tag
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:40:8
+39	        assert tag not in h
+40	        assert h != tag
+41	        assert h.removeprefix("sha256:") != tag
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:41:8
+40	        assert h != tag
+41	        assert h.removeprefix("sha256:") != tag
+42	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:49:4
+48	def test_n1_huella_no_lanza_con_entradas_raras(entrada):
+49	    assert RE_HUELLA.fullmatch(huella_tag(entrada))
+50	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:90:4
+89	    p, r = _provocar(sensor, caso)
+90	    assert r.status_code == 200 and r.json()["estado"] == estado_esperado, r.text
+91	    tag = p["tag"]
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:92:4
+91	    tag = p["tag"]
+92	    assert re.fullmatch(r"[0-9a-f]{64}", tag)
+93	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:96:4
+95	    (tag_bd, estado_bd), = sql("SELECT tag, estado FROM eventos ORDER BY id DESC LIMIT 1")
+96	    assert estado_bd == estado_esperado
+97	    assert tag_bd == huella_tag(tag)
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:97:4
+96	    assert estado_bd == estado_esperado
+97	    assert tag_bd == huella_tag(tag)
+98	    # API.
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:101:4
+100	    rechazado = [e for e in ev if e["estado"] == estado_esperado][0]
+101	    assert rechazado["tag"] == huella_tag(tag)
+102	    # El tag real no aparece en NINGUNA fila de eventos (ningún campo) ni en la respuesta
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:105:4
+104	    verificados = {e["tag"] for e in ev if e["estado"] == "VERIFICADA"}
+105	    assert tag not in verificados
+106	    assert not _aparece(tag, _todas_las_filas_eventos(sql))
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:106:4
+105	    assert tag not in verificados
+106	    assert not _aparece(tag, _todas_las_filas_eventos(sql))
+107	    assert tag not in cliente.get(f"/api/sensores/{sensor.id}/eventos").text
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:107:4
+106	    assert not _aparece(tag, _todas_las_filas_eventos(sql))
+107	    assert tag not in cliente.get(f"/api/sensores/{sensor.id}/eventos").text
+108	    assert tag not in cliente.get("/api/eventos").text
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:108:4
+107	    assert tag not in cliente.get(f"/api/sensores/{sensor.id}/eventos").text
+108	    assert tag not in cliente.get("/api/eventos").text
+109	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:115:4
+114	    p = sensor.payload(seq=1)
+115	    assert sensor.post(p).json()["estado"] == "REPLAY O HUECO"
+116	    assert sensor.post(p).json()["estado"] == "REPLAY O HUECO"
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:116:4
+115	    assert sensor.post(p).json()["estado"] == "REPLAY O HUECO"
+116	    assert sensor.post(p).json()["estado"] == "REPLAY O HUECO"
+117	    ev = [e for e in cliente.get(f"/api/sensores/{sensor.id}/eventos").json()
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:119:4
+118	          if e["estado"] == "REPLAY O HUECO"]
+119	    assert len(ev) == 2 and ev[0]["tag"] == ev[1]["tag"] == huella_tag(p["tag"])
+120	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:125:4
+124	    r = sensor.post(p)
+125	    assert r.json()["estado"] == "VERIFICADA"
+126	    (tag_ev,), = sql("SELECT tag FROM eventos WHERE estado = 'VERIFICADA'")
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:128:4
+127	    (tag_med,), = sql("SELECT tag FROM mediciones")
+128	    assert tag_ev == tag_med == p["tag"]
+129	    ev = cliente.get(f"/api/sensores/{sensor.id}/eventos").json()
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:130:4
+129	    ev = cliente.get(f"/api/sensores/{sensor.id}/eventos").json()
+130	    assert ev[0]["estado"] == "VERIFICADA" and ev[0]["tag"] == p["tag"]
+131	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:139:4
+138	                                              "timestamp_ms": ts, "valor": "1.0", "tag": tag})
+139	    assert r.json()["estado"] == "FALSA"
+140	    assert sql("SELECT tag FROM eventos WHERE estado = 'FALSA'") == [(huella_tag(tag),)]
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:140:4
+139	    assert r.json()["estado"] == "FALSA"
+140	    assert sql("SELECT tag FROM eventos WHERE estado = 'FALSA'") == [(huella_tag(tag),)]
+141	    assert tag not in cliente.get("/api/eventos").text
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:141:4
+140	    assert sql("SELECT tag FROM eventos WHERE estado = 'FALSA'") == [(huella_tag(tag),)]
+141	    assert tag not in cliente.get("/api/eventos").text
+142	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:150:4
+149	    p = sensor.payload(seq=2, ts=ahora_ms() - 10 * VENTANA_MS)
+150	    assert sensor.post(p).json()["estado"] == "FUERA DE VENTANA"
+151	    ev, = [e for e in cliente.get(f"/api/sensores/{sensor.id}/eventos").json()
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:169:4
+168	    sensor.seq = 2
+169	    assert sensor.post(sensor.payload()).json()["estado"] == "VERIFICADA"
+170	    rep = cliente.post(f"/api/sensores/{sensor.id}/verificar-historial").json()
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:171:4
+170	    rep = cliente.post(f"/api/sensores/{sensor.id}/verificar-historial").json()
+171	    assert rep["integro"] is True  # la promoción habría pasado desapercibida
+172	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:177:4
+176	    p, ev, h1 = _preparar_rechazo_fuera_de_ventana(sensor, cliente, sql)
+177	    assert ev["tag"] == huella_tag(p["tag"]) and ev["tag"] != p["tag"]
+178	    assert p["tag"] not in str(ev) and p["tag"] not in cliente.get("/api/eventos").text
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:178:4
+177	    assert ev["tag"] == huella_tag(p["tag"]) and ev["tag"] != p["tag"]
+178	    assert p["tag"] not in str(ev) and p["tag"] not in cliente.get("/api/eventos").text
+179	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:191:4
+190	    r = sensor.post(sensor.payload(seq=3))
+191	    assert r.status_code == 200, r.text
+192	    assert r.json()["estado"] == "CADENA ROTA"
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:192:4
+191	    assert r.status_code == 200, r.text
+192	    assert r.json()["estado"] == "CADENA ROTA"
+193	    assert sql("SELECT COUNT(*) FROM mediciones WHERE sensor_id = ? AND seq = 3",
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:193:4
+192	    assert r.json()["estado"] == "CADENA ROTA"
+193	    assert sql("SELECT COUNT(*) FROM mediciones WHERE sensor_id = ? AND seq = 3",
+194	               (sensor.id,)) == [(0,)]
+195	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:197:4
+196	    rep = cliente.post(f"/api/sensores/{sensor.id}/verificar-historial").json()
+197	    assert rep["integro"] is False
+198	    por_seq = {x["seq"]: x["estado"] for x in rep["registros"]}
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:199:4
+198	    por_seq = {x["seq"]: x["estado"] for x in rep["registros"]}
+199	    assert por_seq[1] == "VERIFICADA" and por_seq[2] == "MANIPULADA"
+200	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:210:4
+209	def test_n2_constantes_maximas():
+210	    assert keystore.MAX_ARGON2 == {"time_cost": 10, "memory_cost": 1048576, "parallelism": 64}
+211	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:215:4
+214	    ok = keystore.validar_params_argon2(_params(time_cost=10, memory_cost=1048576, parallelism=64))
+215	    assert (ok["time_cost"], ok["memory_cost"], ok["parallelism"], ok["hash_len"]) == \
+216	        (10, 1048576, 64, 32)
+217	
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:251:4
+250	        create_app(load_config())
+251	    assert time.monotonic() - t0 < 5
+252	    msg = str(ei.value).lower()
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:253:4
+252	    msg = str(ei.value).lower()
+253	    assert "contraseña incorrecta" not in msg and "password incorrecta" not in msg
+254	    assert "incorrecta" not in msg
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:254:4
+253	    assert "contraseña incorrecta" not in msg and "password incorrecta" not in msg
+254	    assert "incorrecta" not in msg
+255	    assert "kdf_params" in msg
+
+--------------------------------------------------
+>> Issue: [B101:assert_used] Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.
+   Severity: Low   Confidence: High
+   CWE: CWE-703 (https://cwe.mitre.org/data/definitions/703.html)
+   More Info: https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html
+   Location: tests/test_fase3.py:255:4
+254	    assert "incorrecta" not in msg
+255	    assert "kdf_params" in msg
+
+--------------------------------------------------
 
 Code scanned:
-	Total lines of code: 857
+	Total lines of code: 1053
 	Total lines skipped (#nosec): 0
 	Total potential issues skipped due to specifically being disabled (e.g., #nosec BXXX): 0
 
 Run metrics:
 	Total issues (by severity):
 		Undefined: 0
-		Low: 159
+		Low: 202
 		Medium: 0
 		High: 0
 	Total issues (by confidence):
 		Undefined: 0
 		Low: 0
 		Medium: 1
-		High: 158
+		High: 201
 Files skipped (0):

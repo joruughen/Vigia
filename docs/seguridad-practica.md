@@ -150,7 +150,7 @@ TLS 1.3 protege el canal sensor ↔ servidor contra espionaje y modificación **
 - **AAD** = `b"vigia-sensor-key|" + id del sensor`: ata cada blob a su sensor; copiar el blob de un
   sensor a la fila de otro hace fallar el descifrado.
 - La llave de cifrado (KEK, 32 B) se deriva de la contraseña maestra con **Argon2id**
-  (`argon2-cffi`; RFC 9106): `time_cost=3`, `memory_cost=64 MiB`, `parallelism=4`, salida 32 B.
+  (`argon2-cffi`; RFC 9106): `time_cost=3`, `memory_cost=64 MiB`, `parallelism=4`, salida 32 B. Los parámetros guardados en la BD se validan al arrancar contra mínimos (t≥2, m≥19 MiB, p≥1) y máximos (t≤10, m≤1 GiB, p≤64), para impedir degradación o DoS editando `meta`.
 - **Salt de 16 B único y aleatorio**, generado en `init` y guardado en la tabla `meta`
   (`kdf_salt`, junto a `kdf_params`). El salt no es secreto; evita tablas precalculadas.
 - **Canario**: en `init` se cifra un texto fijo (`canario_nonce`, `canario_ct`, en `meta`). Al arrancar,
@@ -201,6 +201,8 @@ misma KEK, a costa de perder consultas directas en SQL.
 `sensores/<id>.key` queda en disco en claro como simulación de la entrega fuera de banda
 (permiso `0600`, directorio `0700`, gitignored); el simulador avisa si el permiso es más amplio y
 rechaza llaves que no sean hex de 32 bytes. La BD se crea con `0600` y su directorio con `0700`.
+**Los permisos `0700`/`0600` se aplican solo al crear**: si el directorio o la BD ya existían, no se
+reajustan (hay que revisarlos a mano con `chmod`).
 
 ### 3.4 Qué detecta la verificación y qué no
 
@@ -234,8 +236,22 @@ MANIPULADA en ese registro (el HMAC se comprueba antes que la cadena); borrar da
 - **Alteración intermedia detectada solo con "Verificar historial completo".** La ingesta normal solo
   re-verifica el último registro guardado; una edición en medio no se ve hasta verificar todo el
   historial.
-- **El truncado de las últimas mediciones no es detectable.** Si se borran los registros finales,
-  lo que queda es una cadena válida más corta (no hay un ancla externa del último hash/seq).
+- **El truncado de las últimas mediciones no se detecta con "Verificar historial completo".** Si se
+  borran los registros finales, lo que queda es una cadena válida más corta (no hay un ancla externa
+  del último hash/seq). Sí se detecta **operativamente**: la siguiente medición del sensor (que ya
+  avanzó su seq) llega con un hueco y el servidor responde `REPLAY O HUECO`; el sensor queda detenido
+  hasta una re-sincronización manual.
+- **Alterar el `seq` del último registro se etiqueta `REPLAY O HUECO`, no `CADENA ROTA`.** En ambos
+  casos la medición entrante se rechaza, pero el orden de 5 pasos aprobado evalúa la secuencia (paso 3)
+  antes de la cadena (paso 5), así que la discrepancia de `seq` se reporta primero como replay/hueco.
+- **El HMAC prueba autenticidad, no frescura de lo almacenado.** Un registro guardado con HMAC válido
+  demuestra que lo generó el dueño de K, no que sea reciente: la frescura (ventana de timestamp y
+  secuencia +1) solo se comprueba en la ingesta, no al leer o re-verificar la BD.
+- **`eventos` guarda solo la huella del tag en los rechazados (N1).** Para estados distintos de
+  VERIFICADA se almacena `sha256:<hex>` del tag, no el tag. Motivo: si `eventos` conservara el tag HMAC de
+  un mensaje auténtico rechazado (p.ej. `FUERA DE VENTANA`), un insider con escritura en la BD podría
+  copiarlo a `mediciones` y hacerlo pasar por válido. La huella no sirve como tag (no se puede invertir
+  ni verificar como HMAC) pero permite correlacionar intentos repetidos. El dashboard la rotula "huella".
 - **HMAC con llave compartida.** El servidor conoce K y podría forjar tags válidos; no hay no-repudio.
   Mitigación futura: firmas Ed25519 por sensor (fuera de alcance).
 - **API y dashboard sin autenticación.** Escuchan en `127.0.0.1` por defecto (`VIGIA_HOST`). La
@@ -259,11 +275,11 @@ Deja en `docs/analisis-estatico/`: `bandit.txt`, `bandit.json`, `bandit-tests.tx
 | Código de la aplicación (`vigia/`, `scripts/`) | bandit | **0 hallazgos** (ninguna severidad); el comentario `# nosec B311` de `vigia/sensor.py` es preventivo (`random.gauss` no está en la lista de B311; bandit reporta `nosec: 0`) |
 | Dependencias (`requirements.txt`, 28 paquetes con transitivas) | pip-audit | **0 vulnerabilidades conocidas** |
 | Dependencias de desarrollo (`requirements-dev.txt`) | pip-audit | **0 vulnerabilidades conocidas** |
-| Tests (`tests/`) | bandit | 159 hallazgos: 158 × B101, 1 × B105 (falsos positivos, ver abajo) |
+| Tests (`tests/`) | bandit | 202 hallazgos: 201 × B101, 1 × B105 (falsos positivos, ver abajo) |
 
 ### Falsos positivos justificados (solo en `tests/`)
 
-- **B101 `assert_used` (158).** Bandit advierte que `assert` se elimina al ejecutar Python con `-O`, lo que es un riesgo si un `assert` hace un control de seguridad en código de producción. En VIGÍA **ningún `assert` está en código de producción** (bandit sobre `vigia/` y `scripts/` da 0 hallazgos). En `tests/` el `assert` es el mecanismo estándar de pytest para expresar la condición esperada; nunca se ejecuta en el servidor.
+- **B101 `assert_used` (201).** Bandit advierte que `assert` se elimina al ejecutar Python con `-O`, lo que es un riesgo si un `assert` hace un control de seguridad en código de producción. En VIGÍA **ningún `assert` está en código de producción** (bandit sobre `vigia/` y `scripts/` da 0 hallazgos). En `tests/` el `assert` es el mecanismo estándar de pytest para expresar la condición esperada; nunca se ejecuta en el servidor.
 - **B105 `hardcoded_password_string` en `tests/conftest.py:28`.** Es la contraseña maestra de prueba (`"contrasena-de-prueba-NO-usar-en-produccion"`) con la que los tests crean bases de datos temporales en `tmp_path` que se destruyen al terminar. No protege ningún dato real ni coincide con ninguna contraseña de despliegue. La contraseña real solo se lee de `VIGIA_MASTER_PASSWORD` (`.env`, excluido del repositorio; plantilla en `.env.example`).
 
-Por qué el código de la aplicación sale limpio: las consultas SQL están todas parametrizadas, no se usa `subprocess`/`eval`/`pickle`, la aleatoriedad criptográfica viene de `secrets`/`os.urandom` (el único uso de `random` es `random.gauss` en `vigia/sensor.py`, que solo genera el ruido de la temperatura simulada y no tiene ningún papel criptográfico; el `# nosec B311` ahí es preventivo, no suprime ningún hallazgo), y no hay hashes rotos (MD5/SHA-1) ni modos inseguros. Limitación: bandit es análisis de patrones, no prueba la ausencia de errores lógicos; por eso se complementa con los 228 tests de estados y ataques y con la revisión independiente.
+Por qué el código de la aplicación sale limpio: las consultas SQL están todas parametrizadas, no se usa `subprocess`/`eval`/`pickle`, la aleatoriedad criptográfica viene de `secrets`/`os.urandom` (el único uso de `random` es `random.gauss` en `vigia/sensor.py`, que solo genera el ruido de la temperatura simulada y no tiene ningún papel criptográfico; el `# nosec B311` ahí es preventivo, no suprime ningún hallazgo), y no hay hashes rotos (MD5/SHA-1) ni modos inseguros. Limitación: bandit es análisis de patrones, no prueba la ausencia de errores lógicos; por eso se complementa con los 266 tests de estados y ataques y con la revisión independiente.

@@ -2,6 +2,7 @@
 from .canonical import FormatoInvalido, mensaje_canonico
 from .chain import GENESIS, siguiente_hash
 from .keystore import (
+    MAX_ARGON2,
     MIN_ARGON2,
     PARAMS_ARGON2,
     ContrasenaIncorrecta,
@@ -13,7 +14,7 @@ from .keystore import (
     nuevo_salt,
     validar_params_argon2,
 )
-from .mac import calcular_tag, generar_llave_sensor, verificar_tag
+from .mac import calcular_tag, generar_llave_sensor, huella_tag, verificar_tag
 from .verifier import (
     Estado,
     Medicion,
@@ -27,9 +28,9 @@ from .verifier import (
 
 __all__ = [
     "FormatoInvalido", "mensaje_canonico", "GENESIS", "siguiente_hash",
-    "PARAMS_ARGON2", "MIN_ARGON2", "validar_params_argon2", "ContrasenaIncorrecta", "nuevo_salt", "derivar_kek",
+    "PARAMS_ARGON2", "MIN_ARGON2", "MAX_ARGON2", "validar_params_argon2", "ContrasenaIncorrecta", "nuevo_salt", "derivar_kek",
     "cifrar_llave_sensor", "descifrar_llave_sensor", "crear_canario", "comprobar_canario",
-    "generar_llave_sensor", "calcular_tag", "verificar_tag",
+    "generar_llave_sensor", "calcular_tag", "verificar_tag", "huella_tag",
     "Estado", "Medicion", "RegistroGuardado", "Resultado", "ResultadoRegistro",
     "ReporteHistorial", "verificar_medicion", "verificar_historial",
 ]

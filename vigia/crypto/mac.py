@@ -52,3 +52,22 @@ def verificar_tag(llave: bytes, mensaje: bytes, tag_hex: str) -> bool:
     _validar_llave(llave)
     esperado = hmac.new(bytes(llave), mensaje, hashlib.sha256).digest()
     return hmac.compare_digest(esperado, recibido)
+
+
+_DOMINIO_HUELLA = b"vigia-huella-tag|"
+
+
+def huella_tag(tag_hex: str) -> str:
+    """Huella no reversible de un tag para la tabla eventos (mensajes RECHAZADOS).
+
+    La tabla eventos guarda solo esta huella, nunca el tag, para que un insider con
+    escritura en la BD no pueda copiar un tag HMAC auténtico de un mensaje rechazado
+    (p.ej. FUERA DE VENTANA) a la tabla mediciones y hacerlo pasar por válido.
+    La huella permite correlacionar intentos repetidos sin conservar el tag.
+    No es un MAC: no requiere llave (SHA-256 con separación de dominio).
+    Acepta cualquier string, incluso un tag inválido, sin lanzar.
+    """
+    if not isinstance(tag_hex, str):
+        tag_hex = str(tag_hex)
+    datos = _DOMINIO_HUELLA + tag_hex.encode("ascii", "replace")
+    return "sha256:" + hashlib.sha256(datos).hexdigest()

@@ -135,8 +135,8 @@ def main(argv: list[str] | None = None) -> int:
                             # El servidor ya tiene esta seq: la respuesta original se perdió.
                             seq = siguiente
                             guardar_seq(ruta_seq, seq)
-                            print(f"[seq {siguiente}] Aviso: el servidor ya tenía esta seq (respuesta "
-                                  f"anterior perdida); se avanza la seq local a {seq}.", file=sys.stderr)
+                            print(f"AVISO: el servidor ya tenía la seq {siguiente}; se avanza. "
+                                  "Si no hubo pérdida de respuesta, revisar la BD.", file=sys.stderr)
                         elif r["estado"] == "REPLAY O HUECO":
                             print(f"[seq {siguiente}] Aviso: desincronización con el servidor; "
                                   "requiere re-sincronización manual (no se corrige automáticamente).",

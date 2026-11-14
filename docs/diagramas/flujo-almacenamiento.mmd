@@ -1,0 +1,73 @@
+sequenceDiagram
+    autonumber
+    actor ADM as Administrador
+    participant ENV as .env
+    participant CLI as CLI vigia.cli
+    participant KDF as Argon2id
+    participant GCM as AES-256-GCM
+    participant DB as SQLite
+    participant KF as sensores/ID.key
+    participant SRV as Servidor FastAPI
+
+    Note over ADM,SRV: 1. init - python -m vigia.cli init
+    ADM->>CLI: init
+    CLI->>ENV: lee VIGIA_MASTER_PASSWORD (mínimo 16 caracteres, se rechaza el valor de ejemplo)
+    CLI->>DB: crea el esquema, si meta ya tiene kdf_salt avisa y no sobrescribe
+    CLI->>CLI: salt = 16 bytes aleatorios del SO (os.urandom), único por BD
+    CLI->>KDF: contraseña, salt, t=3, m=64 MiB, p=4, salida de 32 bytes
+    KDF-->>CLI: KEK de 32 bytes (no se guarda)
+    CLI->>GCM: cifra el texto fijo del canario con la KEK, nonce nuevo de 12 B, AAD de canario
+    GCM-->>CLI: canario_nonce y canario_ct
+    CLI->>DB: BEGIN IMMEDIATE, INSERT en meta kdf_salt, kdf_params en JSON, canario_nonce y canario_ct, COMMIT
+
+    Note over ADM,SRV: 2. registrar-sensor - python -m vigia.cli registrar-sensor ID
+    ADM->>CLI: registrar-sensor ID
+    CLI->>CLI: valida el formato del id
+    CLI->>DB: lee salt, parámetros y canario de meta
+    CLI->>KDF: contraseña, salt y parámetros guardados
+    KDF-->>CLI: KEK
+    CLI->>GCM: descifra el canario para validar la contraseña
+    alt contraseña incorrecta
+        GCM-->>CLI: falla la autenticación GCM
+        CLI-->>ADM: error, no se registra nada
+    else contraseña correcta
+        CLI->>DB: el id ya existe? si existe, error y fin
+        CLI->>KF: ya existe sensores/ID.key? si existe, error y no se sobrescribe
+        CLI->>CLI: K = 32 bytes aleatorios (secrets.token_bytes)
+        CLI->>GCM: cifra K con la KEK, nonce nuevo de 12 B, AAD = prefijo fijo más el id
+        GCM-->>CLI: nonce y ciphertext con tag GCM
+        CLI->>KF: escribe K en hex, O_EXCL, permiso 0600 (entrega fuera de banda simulada)
+        CLI->>DB: INSERT en sensores id, nonce, llave_cifrada (BLOB), activo = 1
+        Note over CLI,KF: si el INSERT falla se borra el archivo .key
+    end
+
+    Note over ADM,SRV: 3. arranque del servidor - scripts/run_server.py
+    ADM->>SRV: arranca el servidor con TLS 1.3 como versión mínima
+    SRV->>ENV: lee VIGIA_MASTER_PASSWORD
+    SRV->>DB: lee kdf_salt, kdf_params, canario_nonce y canario_ct
+    alt BD sin inicializar
+        SRV-->>ADM: error de arranque, ejecutar init
+    else parámetros Argon2id fuera de los mínimos o máximos
+        SRV-->>ADM: error de arranque, la BD pudo ser alterada
+    else parámetros válidos
+        SRV->>KDF: contraseña, salt y parámetros guardados
+        KDF-->>SRV: KEK
+        SRV->>GCM: descifra el canario con la KEK
+        alt contraseña incorrecta
+            GCM-->>SRV: falla la autenticación GCM
+            SRV-->>ADM: el servidor NO arranca
+        else contraseña correcta
+            Note over SRV: la KEK queda solo en memoria y el servidor atiende peticiones
+        end
+    end
+
+    Note over ADM,SRV: 4. ingesta - POST /api/mediciones
+    SRV->>DB: BEGIN IMMEDIATE, lee nonce, llave_cifrada y activo del sensor
+    alt sensor inexistente o revocado
+        SRV->>SRV: llave = None, el paso 1 da FALSA
+    else sensor activo
+        SRV->>GCM: descifra el BLOB con la KEK y AAD del id
+        GCM-->>SRV: K en memoria solo durante esta petición
+        Note over SRV: si GCM falla (BLOB alterado) se responde 500 genérico y se hace ROLLBACK
+    end
+    SRV->>DB: inserta el evento (tag HMAC si VERIFICADA, huella SHA-256 del tag si fue rechazada) y, solo si VERIFICADA, la medición, luego COMMIT

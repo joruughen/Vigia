@@ -92,8 +92,10 @@
       tr.appendChild(celda(fecha(e.timestamp_ms)));
       tr.appendChild(celda(e.seq));
       tr.appendChild(celda(e.valor, "mono"));
-      const tdTag = celda(abreviar(e.tag), "mono");
-      tdTag.title = e.tag;
+      // e.tag: tag HMAC si VERIFICADA; huella SHA-256 del tag ("sha256:...") si fue rechazada.
+      const verificada = e.estado === "VERIFICADA";
+      const tdTag = celda((verificada ? "HMAC " : "huella ") + abreviar(e.tag), "mono");
+      tdTag.title = (verificada ? "HMAC: " : "Huella SHA-256 del tag (no es el tag): ") + e.tag;
       tr.appendChild(tdTag);
       const tdEst = el("td");
       tdEst.appendChild(etiqueta(e.estado));
